@@ -32,7 +32,7 @@ static class Engine
         ["4b"] = new("Standard: Qwen3-VL 4B, 3.4 GB download, needs about 5 GB of graphics memory",
             Hf("Qwen3-VL-4B-Instruct-GGUF", "Qwen3VL-4B-Instruct-Q4_K_M.gguf", 2497281664, "66358cb18bb6b3b1b6675aa412c7a88ef01d228f481184d13668e5201c730a0a"),
             Hf("Qwen3-VL-4B-Instruct-GGUF", "mmproj-Qwen3VL-4B-Instruct-F16.gguf", 836180256, "256f3a43bd4205ffef48d6b92715e1e70b5b0e9aef06522584967513a9985331")),
-        ["8b"] = new("Best: Qwen3-VL 8B, 6.2 GB download, needs about 8 GB of graphics memory",
+        ["8b"] = new("Best: Qwen3-VL 8B, 6.2 GB download, fastest with 8 GB of graphics memory (runs partly on the CPU with less)",
             Hf("Qwen3-VL-8B-Instruct-GGUF", "Qwen3VL-8B-Instruct-Q4_K_M.gguf", 5027784800, "67d1659bfe71b89d50b45a4ad1a9e5b997e5bb16ce5da66a6a6167abd569e9e2"),
             Hf("Qwen3-VL-8B-Instruct-GGUF", "mmproj-Qwen3VL-8B-Instruct-F16.gguf", 1159029824, "ca524100ebf825c9a870db1c580d03879e0da0ab2541697e2458e64891cf9d38")),
     };
@@ -167,7 +167,9 @@ static class Engine
         foreach (var arg in new[]
                  {
                      "-m", Path.Combine(ModelsDir, m.Weights.File), "--mmproj", Path.Combine(ModelsDir, m.Vision.File),
-                     "--host", "127.0.0.1", "--port", _port.ToString(), "-ngl", "99", "-c", "16384", "--no-ui", "--image-min-tokens", "1024",
+                     // no -ngl: llama.cpp then fits as many layers as free graphics memory allows and runs the rest on the CPU.
+                     // One request at a time and 8k tokens (a page is about 2k) keep the cache small.
+                     "--host", "127.0.0.1", "--port", _port.ToString(), "-c", "8192", "-np", "1", "--no-ui", "--image-min-tokens", "1024",
                      "--device", PickDevice(exe),
                  })
             psi.ArgumentList.Add(arg);
@@ -238,7 +240,9 @@ static class Engine
             {
                 string tail;
                 lock (Tail) tail = string.Join("\n", Tail);
-                throw new IOException("The AI server stopped while loading:\n" + tail);
+                throw new IOException(tail.Contains("OutOfDeviceMemory")
+                    ? "Not enough free graphics memory for this model. Close apps that use the graphics card (games, video, browsers) or use the Standard model."
+                    : "The AI server stopped while loading:\n" + tail);
             }
             try
             {

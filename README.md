@@ -26,7 +26,9 @@ GitHub, checked against fixed fingerprints):
 | Standard (Qwen3-VL 4B) | 3.4 GB | about 5 GB |
 | Best (Qwen3-VL 8B) | 6.2 GB | about 8 GB |
 
-It runs on any graphics card with Vulkan drivers (NVIDIA, AMD, Intel). The model is saved in
+It runs on any graphics card with Vulkan drivers (NVIDIA, AMD, Intel). If a model doesn't fit in the
+card's free memory, the part that doesn't fit runs on the processor: it still works, just slower
+(the Best model reads a page in about 30 seconds on an 8 GB laptop card, the Standard one in about 7). The model is saved in
 `Inkswap-Data` next to the exe, so copy that folder along with the exe to move it to another PC or
 a USB stick.
 
