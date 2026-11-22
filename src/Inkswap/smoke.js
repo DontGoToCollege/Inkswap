@@ -93,9 +93,42 @@
   if (names('.thumb') !== 'smoke,b') throw new Error('the ✕ left ' + names('.thumb'));
   const confirmOk = window.confirm; window.confirm = () => true;   // the test page has work: answer the question with yes
   thumb(1).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 60 }));
-  document.querySelector('#ctx [data-a=others]').click();
+  const menuItem = t => [...document.querySelectorAll('#ctx button')].find(b => b.textContent.startsWith(t));
+  menuItem('Close all other pages').click();
   window.confirm = confirmOk;
   if (names('.thumb') !== 'b' || app.cur !== 0 || !document.querySelector('#ctx').hidden) throw new Error('Close others left ' + names('.thumb') + ' cur=' + app.cur);
+  // groups: three more pages, two of them into a named group; sorting the top level must not reorder the group
+  const more2 = new DataTransfer();
+  for (const n of ['p10', 'p2', 'p1']) more2.items.add(new File([await new Promise(r => c.toBlob(r))], n + '.png', { type: 'image/png' }));
+  input.files = more2.files; input.dispatchEvent(new Event('change'));
+  for (let i = 0; i < 50 && app.pages.length < 4; i++) await sleep(100);
+  const byName = n => [...document.querySelectorAll('.thumb')].find(t => t.querySelector('span').textContent.replace('✓ ', '') === n);
+  byName('p10').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  byName('p2').dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+  document.querySelector('#bNewGroup').click();
+  const nameBox = document.querySelector('.grename');
+  if (!nameBox) throw new Error('new group did not ask for a name');
+  nameBox.value = 'Chapter'; nameBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  const inGroup = () => names('.gbody .thumb'), top = () => [...document.querySelectorAll('#pages > .thumb span, #pages > .grp .gname')].map(s => s.textContent.replace('✓ ', '')).join();
+  if (document.querySelector('.gname')?.textContent !== 'Chapter' || inGroup() !== 'p2,p10') throw new Error('group: ' + document.querySelector('.gname')?.textContent + ' / ' + inGroup());
+  const sortSel = document.querySelector('#sSort'); sortSel.value = 'name'; sortSel.dispatchEvent(new Event('change'));
+  document.querySelector('#bSortDir').click();   // name, descending
+  if (top() !== 'p1,Chapter,b' || inGroup() !== 'p2,p10') throw new Error('top-level sort: ' + top() + ' / group: ' + inGroup());
+  document.querySelector('.grp .gsort button').click();   // the group's own direction
+  if (inGroup() !== 'p10,p2' || top() !== 'p1,Chapter,b') throw new Error('group sort: ' + inGroup() + ' / top: ' + top());
+  document.querySelector('.gh').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  if (document.querySelector('.gbody')) throw new Error('group did not collapse');
+  document.querySelector('.gh').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  // drag p1 onto the group
+  const dt = new DataTransfer();
+  byName('p1').dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+  document.querySelector('.gh').dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  document.querySelector('.gh').dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  if (inGroup() !== 'p10,p2,p1') throw new Error('drag into group gave ' + inGroup());
+  document.querySelector('.gh').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 60 }));
+  menuItem('Ungroup').click();
+  if (document.querySelector('.grp') || app.pages.some(p => p.group)) throw new Error('ungroup left a group');
+  sortSel.value = 'added'; sortSel.dispatchEvent(new Event('change')); document.querySelector('#bSortDir').click();
   // a reply that repeats itself and is cut off mid-entry still gives its finished, distinct bubbles
   const cutOff = '{"items": [\n {"bbox_2d": [10, 20, 300, 400], "text": "お前は\\"誰\\"だ"},\n' +
     ' {"bbox_2d": [500, 20, 900, 400], "text": "待って", "lang": "ja"},\n {"bbox_2d": [12, 22, 301, 398], "text": "お前は\\"誰\\"だ"},\n {"bbox_2d": [12, 2';

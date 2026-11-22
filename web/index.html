@@ -17,7 +17,7 @@ button:disabled{opacity:.45;cursor:default}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 select,input[type=number],input[type=text]{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
 textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px;resize:vertical;min-height:38px}
-#app{display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:150px 1fr 380px;height:100%}
+#app{display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:200px 1fr 380px;height:100%}
 #top{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
 #top .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
 #top label{display:flex;align-items:center;gap:4px;color:var(--dim)}
@@ -25,10 +25,28 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
 #aiPill{display:flex;align-items:center;gap:6px}
 #aiPill i{width:9px;height:9px;border-radius:50%;background:var(--dim);display:inline-block}
 #aiPill.ready i{background:var(--ok)} #aiPill.busy i{background:var(--warn)} #aiPill.error i{background:var(--bad)}
-#pages{overflow-y:auto;border-right:1px solid var(--line);padding:6px;background:var(--panel)}
+#left{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--panel)}
+#pagesHead{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:6px;border-bottom:1px solid var(--line)}
+#pagesHead label{display:flex;align-items:center;gap:4px;color:var(--dim);flex:1;min-width:0}
+#pagesHead select{flex:1;min-width:0;padding:2px 4px}
+#pagesHead button{padding:2px 8px}
+#bNewGroup{width:100%}
+#pages{overflow-y:auto;padding:6px;flex:1;min-height:0}
+.grp{margin-bottom:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel2)}
+.grp.drop{border-color:var(--accent);box-shadow:0 0 0 2px rgba(79,156,249,.4)}
+.gh{display:flex;align-items:center;gap:5px;padding:5px 6px;cursor:pointer;user-select:none}
+.gh .tw{width:12px;color:var(--dim)}
+.gh .gname{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text}
+.gh .cnt{font-size:11px;color:var(--dim);background:var(--bg);border-radius:8px;padding:0 6px}
+.grename{flex:1;min-width:0;padding:1px 4px}
+.gsort{display:flex;gap:4px;padding:0 6px 6px}
+.gsort select{flex:1;min-width:0;font-size:11px;padding:1px 4px}
+.gsort button{font-size:11px;padding:1px 7px}
+.gbody{padding:0 6px 2px}
+.gempty{color:var(--dim);font-size:11px;padding:6px 2px 8px;text-align:center}
 .thumb{display:block;width:100%;margin-bottom:8px;border:2px solid transparent;border-radius:6px;padding:0;background:none;overflow:hidden;text-align:left}
 .thumb.on{border-color:var(--accent)}
-.thumb img{display:block;width:100%}
+.thumb img{display:block;width:100%;max-height:150px;object-fit:contain;background:#0a0c10}
 .thumb span{display:block;padding:2px 4px;font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .thumb span b{color:var(--ok);font-weight:600}
 .thumb{position:relative}
@@ -124,7 +142,14 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
     <span class="grow"></span>
     <button id="aiPill" title="AI model setup"><i></i><span>AI: checking…</span></button>
   </div>
-  <div id="pages"></div>
+  <div id="left">
+    <div id="pagesHead">
+      <label title="How loose pages and groups are ordered (each group sorts its own pages)">Sort <select id="sSort"></select></label>
+      <button id="bSortDir" title="Ascending or descending">↑</button>
+      <button id="bNewGroup" title="Put the picked pages in a new group (or make an empty one to drag pages into)">New group</button>
+    </div>
+    <div id="pages"></div>
+  </div>
   <div id="view">
     <div id="empty">
       <div style="font-size:16px;color:var(--text)">Open manga pages to start</div>
@@ -157,14 +182,14 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
 <div id="toasts"></div>
 <div id="ctx" hidden></div>
 <script>
-const VERSION='1.4.0';
+const VERSION='1.5.0';
 const LANGS={ja:'Japanese',ko:'Korean',zh:'Chinese',es:'Spanish',en:'English'};
 const NO_SPACES=new Set(['ja','zh']);   // languages written without spaces between words
 // any language code the AI reports gets an English name, not only the ones in the menus
 const langName=c=>{if(!c)return'Unknown language';if(LANGS[c])return LANGS[c];try{return new Intl.DisplayNames(['en'],{type:'language'}).of(c)}catch{return c}};
 const itemLang=it=>it.lang||(S.src==='auto'?'':S.src);
 const $=s=>document.querySelector(s);
-const S=Object.assign({src:'auto',dst:'en',model:'4b',font:'Comic Neue',caps:true,reread:true,sfx:false,mode:'out',layer:'both',show:true},(()=>{try{return JSON.parse(localStorage.getItem('inkswap')||'{}')}catch{return{}}})());
+const S=Object.assign({src:'auto',dst:'en',model:'4b',font:'Comic Neue',caps:true,reread:true,sfx:false,mode:'out',layer:'both',show:true,rootSort:{key:'added',dir:1}},(()=>{try{return JSON.parse(localStorage.getItem('inkswap')||'{}')}catch{return{}}})());
 const saveS=()=>{try{localStorage.setItem('inkswap',JSON.stringify(S))}catch{}};
 // once: switch older settings to the new defaults (detect the language, translate to English; Hidden is now its own toggle)
 if(!S.v14){S.src='auto';S.dst='en';if(S.layer==='hide'){S.layer='both';S.show=false}S.v14=1;saveS()}
@@ -239,7 +264,7 @@ async function openFiles(files){
       const img=await createImageBitmap(f);
       const t=document.createElement('canvas'),k=Math.min(1,260/img.width);
       t.width=img.width*k;t.height=img.height*k;t.getContext('2d').drawImage(img,0,0,t.width,t.height);
-      pages.push({name:f.name.replace(/\.[^.]+$/,''),img,w:img.width,h:img.height,items:[],nextId:1,thumb:t.toDataURL('image/jpeg',.7),done:false});
+      pages.push({name:f.name.replace(/\.[^.]+$/,''),added:++seq,mtime:f.lastModified||Date.now(),size:f.size,group:null,img,w:img.width,h:img.height,items:[],nextId:1,thumb:t.toDataURL('image/jpeg',.7),done:false});
     }catch(e){toast(`Couldn't open ${f.name}: ${e.message}`,true)}
   }
   drawPages();
@@ -250,35 +275,136 @@ $('#fileIn').onchange=e=>{openFiles([...e.target.files]);e.target.value=''};
 addEventListener('dragover',e=>e.preventDefault());
 addEventListener('drop',e=>{e.preventDefault();openFiles([...e.dataTransfer.files])});
 
-// page list: click picks one page, Ctrl+click adds/removes, Shift+click picks a range; right-click or the hover ✕ closes
-const picked=new Set();let anchor=-1;
-function drawPages(){
-  $('#pages').innerHTML=pages.map((p,i)=>`<button class="thumb${i===cur?' on':''}${picked.has(p)?' picked':''}" data-i="${i}" title="${esc(p.name)}"><img src="${p.thumb}" alt=""><span>${p.done?'<b>✓</b> ':''}${esc(p.name)}</span><i class="x" role="button" aria-label="Close ${esc(p.name)}" title="Close this page">✕</i></button>`).join('');
-  $('#pages').querySelectorAll('.thumb').forEach(b=>{
-    const i=+b.dataset.i,p=pages[i];
-    b.onclick=e=>{
-      if(e.target.classList.contains('x')){closePages([p]);return}
-      const ctrl=e.ctrlKey||e.metaKey;
-      if(e.shiftKey&&anchor>=0){picked.clear();for(let k=Math.min(anchor,i);k<=Math.max(anchor,i);k++)picked.add(pages[k])}
-      else if(ctrl){if(picked.has(p))picked.delete(p);else picked.add(p);anchor=i}
-      else{picked.clear();picked.add(p);anchor=i}
-      if(i!==cur&&picked.has(p))show(i);else drawPages();
-    };
-    b.oncontextmenu=e=>{
-      e.preventDefault();
-      if(!picked.has(p)){picked.clear();picked.add(p);anchor=i;drawPages()}
-      pageMenu(e.clientX,e.clientY);
-    };
-  });
+// Page list: click picks one page, Ctrl+click adds/removes, Shift+click picks a range (in the order shown); the hover ✕
+// or right-click closes. Pages can sit in named groups that collapse; the top level (loose pages and groups) has one
+// sort, and each group sorts its own pages, so sorting one never reorders another.
+const picked=new Set();let anchorP=null,groups=[],seq=0;
+const SORTS={added:'Order added',name:'Name',mtime:'Date modified',size:'File size'};
+const pagesOf=g=>pages.filter(p=>p.group===g.id);
+// a group sorts at the top level by its name, newest page, total size or when it was made
+function sortVal(x,key){
+  if(!x.isGroup)return x[key];
+  const ps=pagesOf(x);
+  return key==='name'?x.name:key==='mtime'?Math.max(0,...ps.map(p=>p.mtime)):key==='size'?ps.reduce((a,p)=>a+p.size,0):x.added;
 }
-function pageMenu(x,y){
-  const m=$('#ctx'),n=picked.size;
-  m.innerHTML=`<button data-a="close">${n>1?`Close ${n} pages`:'Close page'}</button>`+(pages.length>n?`<button data-a="others">Close all other pages</button>`:'');
+// names compare like people expect: "page 2" before "page 10"
+function sorted(list,{key,dir}){
+  return[...list].sort((a,b)=>{const va=sortVal(a,key),vb=sortVal(b,key);
+    return dir*(typeof va==='string'?va.localeCompare(vb,undefined,{numeric:true,sensitivity:'base'}):va-vb)||a.added-b.added});
+}
+const topLevel=()=>sorted([...groups,...pages.filter(p=>!p.group)],S.rootSort);
+// pages in the order shown; visibleOnly leaves out collapsed groups (for Shift+click ranges)
+const pageOrder=visibleOnly=>topLevel().flatMap(e=>e.isGroup?(visibleOnly&&e.collapsed?[]:sorted(pagesOf(e),e.sort)):[e]);
+const sortOptions=v=>Object.entries(SORTS).map(([k,n])=>`<option value="${k}" ${k===v?'selected':''}>${n}</option>`).join('');
+function drawPages(){
+  const thumb=p=>{const i=pages.indexOf(p);
+    return `<button class="thumb${i===cur?' on':''}${picked.has(p)?' picked':''}" data-i="${i}" draggable="true" title="${esc(p.name)}"><img src="${p.thumb}" alt=""><span>${p.done?'<b>✓</b> ':''}${esc(p.name)}</span><i class="x" role="button" aria-label="Close ${esc(p.name)}" title="Close this page">✕</i></button>`};
+  $('#pages').innerHTML=topLevel().map(e=>{
+    if(!e.isGroup)return thumb(e);
+    const ps=sorted(pagesOf(e),e.sort);
+    return `<div class="grp${e.collapsed?' shut':''}" data-g="${e.id}">
+      <div class="gh" title="Click to collapse or expand; double-click the name to rename; right-click for more"><span class="tw">${e.collapsed?'▸':'▾'}</span><span class="gname">${esc(e.name)}</span><span class="cnt">${ps.length}</span></div>
+      ${e.collapsed?'':`<div class="gsort"><select data-a="gsort" title="Sort the pages in this group">${sortOptions(e.sort.key)}</select><button data-a="gdir" title="Ascending or descending">${e.sort.dir>0?'↑':'↓'}</button></div>
+      <div class="gbody">${ps.map(thumb).join('')||'<div class="gempty">Drag pages here</div>'}</div>`}</div>`;
+  }).join('');
+  $('#sSort').value=S.rootSort.key;$('#bSortDir').textContent=S.rootSort.dir>0?'↑':'↓';
+}
+const groupOf=el=>groups.find(g=>g.id===+el.closest('.grp')?.dataset.g);
+$('#pages').addEventListener('click',e=>{
+  const t=e.target,b=t.closest('.thumb');
+  if(b){
+    const p=pages[+b.dataset.i];
+    if(t.classList.contains('x')){closePages([p]);return}
+    if(e.shiftKey&&anchorP&&pages.includes(anchorP)){
+      const vis=pageOrder(true),a=vis.indexOf(anchorP),z=vis.indexOf(p);
+      picked.clear();for(let k=Math.min(a,z);k<=Math.max(a,z);k++)if(k>=0)picked.add(vis[k]);
+    }else if(e.ctrlKey||e.metaKey){if(picked.has(p))picked.delete(p);else picked.add(p);anchorP=p}
+    else{picked.clear();picked.add(p);anchorP=p}
+    const i=pages.indexOf(p);
+    if(i!==cur&&picked.has(p))show(i);else drawPages();
+    return;
+  }
+  const g=groupOf(t);if(!g)return;
+  if(t.dataset.a==='gdir'){g.sort.dir*=-1;drawPages();return}
+  if(t.closest('.gh')&&!t.classList.contains('gname')){g.collapsed=!g.collapsed;drawPages()}
+});
+$('#pages').addEventListener('dblclick',e=>{const g=e.target.classList.contains('gname')&&groupOf(e.target);if(g)renameGroup(g)});
+$('#pages').addEventListener('change',e=>{const g=groupOf(e.target);if(g&&e.target.dataset.a==='gsort'){g.sort.key=e.target.value;drawPages()}});
+$('#pages').addEventListener('contextmenu',e=>{
+  const b=e.target.closest('.thumb'),g=groupOf(e.target);
+  if(b){
+    e.preventDefault();
+    const p=pages[+b.dataset.i];
+    if(!picked.has(p)){picked.clear();picked.add(p);anchorP=p;drawPages()}
+    pageMenu(e.clientX,e.clientY);
+  }else if(g&&e.target.closest('.gh')){e.preventDefault();groupMenu(g,e.clientX,e.clientY)}
+});
+// drag picked pages onto a group (or the list's empty space, to take them out of their group)
+$('#pages').addEventListener('dragstart',e=>{
+  const b=e.target.closest('.thumb');if(!b)return;
+  const p=pages[+b.dataset.i];
+  if(!picked.has(p)){picked.clear();picked.add(p);anchorP=p}
+  e.dataTransfer.setData('text/x-inkswap-pages','1');e.dataTransfer.effectAllowed='move';
+});
+const internalDrag=e=>e.dataTransfer.types.includes('text/x-inkswap-pages');
+$('#pages').addEventListener('dragover',e=>{
+  if(!internalDrag(e))return;
+  e.preventDefault();e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('.grp.drop').forEach(x=>x.classList.remove('drop'));
+  e.target.closest('.grp')?.classList.add('drop');
+});
+$('#pages').addEventListener('dragleave',e=>{if(!$('#pages').contains(e.relatedTarget))document.querySelectorAll('.grp.drop').forEach(x=>x.classList.remove('drop'))});
+$('#pages').addEventListener('drop',e=>{
+  if(!internalDrag(e))return;
+  e.preventDefault();e.stopPropagation();   // not a file drop
+  moveTo([...picked],groupOf(e.target)||null);
+});
+function moveTo(list,g){for(const p of list)p.group=g?g.id:null;if(g)g.collapsed=false;drawPages()}
+function newGroup(list){
+  const g={isGroup:true,id:++seq,added:seq,name:`Group ${groups.length+1}`,collapsed:false,sort:{key:'name',dir:1}};
+  groups.push(g);moveTo(list,g);renameGroup(g);
+  return g;
+}
+function renameGroup(g){
+  const span=document.querySelector(`.grp[data-g="${g.id}"] .gname`);if(!span)return;
+  const inp=Object.assign(document.createElement('input'),{value:g.name,className:'grename'});
+  inp.setAttribute('aria-label','Group name');
+  span.replaceWith(inp);inp.focus();inp.select();
+  let done=false;
+  const finish=keep=>{if(done)return;done=true;if(keep&&inp.value.trim())g.name=inp.value.trim();drawPages()};
+  inp.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter')finish(true);if(e.key==='Escape')finish(false)};
+  inp.onblur=()=>finish(true);
+  inp.onclick=e=>e.stopPropagation();
+}
+function menu(x,y,items){
+  const m=$('#ctx');
+  m.innerHTML=items.map(([label],k)=>`<button data-k="${k}">${esc(label)}</button>`).join('');
   m.hidden=false;
   m.style.left=Math.min(x,innerWidth-m.offsetWidth-4)+'px';m.style.top=Math.min(y,innerHeight-m.offsetHeight-4)+'px';
-  m.querySelector('[data-a=close]').onclick=()=>{m.hidden=true;closePages([...picked])};
-  const o=m.querySelector('[data-a=others]');if(o)o.onclick=()=>{m.hidden=true;closePages(pages.filter(p=>!picked.has(p)))};
+  m.querySelectorAll('button').forEach(b=>b.onclick=()=>{m.hidden=true;items[+b.dataset.k][1]()});
 }
+function pageMenu(x,y){
+  const list=[...picked],n=list.length;
+  menu(x,y,[
+    [n>1?`Close ${n} pages`:'Close page',()=>closePages(list)],
+    ...(pages.length>n?[['Close all other pages',()=>closePages(pages.filter(p=>!picked.has(p)))]]:[]),
+    [n>1?`New group from these ${n} pages`:'New group from this page',()=>newGroup(list)],
+    ...groups.filter(g=>list.some(p=>p.group!==g.id)).map(g=>[`Move to “${g.name}”`,()=>moveTo(list,g)]),
+    ...(list.some(p=>p.group)?[['Remove from group',()=>moveTo(list,null)]]:[]),
+  ]);
+}
+function groupMenu(g,x,y){
+  const ps=pagesOf(g);
+  menu(x,y,[
+    ['Rename',()=>renameGroup(g)],
+    [g.collapsed?'Expand':'Collapse',()=>{g.collapsed=!g.collapsed;drawPages()}],
+    ['Ungroup (keep the pages)',()=>{groups=groups.filter(x=>x!==g);moveTo(ps,null)}],
+    ...(ps.length?[[`Close the ${ps.length} page${ps.length===1?'':'s'} in this group`,()=>closePages(ps)]]:[]),
+  ]);
+}
+$('#bNewGroup').onclick=()=>newGroup([...picked]);
+$('#sSort').onchange=e=>{S.rootSort.key=e.target.value;saveS();drawPages()};
+$('#bSortDir').onclick=()=>{S.rootSort.dir*=-1;saveS();drawPages()};
 addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))$('#ctx').hidden=true},true);
 addEventListener('keydown',e=>{if(e.key==='Escape')$('#ctx').hidden=true});
 addEventListener('blur',()=>$('#ctx').hidden=true);
@@ -290,10 +416,10 @@ function closePages(list){
   const msg=list.length===1?"Close this page? Its translations and boxes will be lost unless you've saved it."
     :`Close ${list.length} pages? ${work} of them ${work===1?'has':'have'} translations and boxes that will be lost unless you've saved them.`;
   if(work&&!confirm(msg))return;
-  const curP=page(),at=cur;
+  const curP=page(),at=pageOrder(false).indexOf(curP);
   for(const p of list){pages.splice(pages.indexOf(p),1);picked.delete(p)}
-  anchor=-1;
-  if(!pages.includes(curP)){cur=-1;show(pages.length?Math.min(at,pages.length-1):-1)}
+  anchorP=null;
+  if(!pages.includes(curP)){const next=pageOrder(false);cur=-1;show(next.length?pages.indexOf(next[Math.min(at,next.length-1)]):-1)}
   else{cur=pages.indexOf(curP);drawPages();updateButtons()}
   if(!pages.some(p=>p.items.length))dirty(false);
 }
@@ -301,7 +427,7 @@ function show(i){
   if(cur>=0&&pages[cur]&&i!==cur){delete pages[cur].data;delete pages[cur]._clean}   // keep pixel data for the open page only
   cur=i;sel=null;
   const p=page();
-  if(p&&!picked.has(p)){picked.clear();picked.add(p);anchor=i}   // the page on show always counts as selected
+  if(p&&!picked.has(p)){picked.clear();picked.add(p);anchorP=p}   // the page on show always counts as selected
   $('#empty').style.display=p?'none':'flex';
   $('#stage').style.display=p?'block':'none';
   if(p){cv.width=p.w;cv.height=p.h;fitZoom()}
@@ -767,7 +893,7 @@ function updateButtons(){
   $('#bSave').disabled=!has;$('#bSaveAll').disabled=!pages.length;$('#bStop').hidden=!busy;
 }
 $('#bRun').onclick=()=>{const p=page();if(p.items.some(i=>i.trans)&&!confirm('Find the text again? This replaces the boxes and translations on this page.'))return;guard(()=>processPage(p))};
-$('#bRunAll').onclick=()=>guard(async()=>{for(const p of pages){if(stopReq)break;if(!p.done)await processPage(p)}});
+$('#bRunAll').onclick=()=>guard(async()=>{for(const p of pageOrder(false)){if(stopReq)break;if(!p.done)await processPage(p)}});
 $('#bRetrans').onclick=()=>guard(async()=>{status('Translating…');await translateItems(page(),page().items)});
 $('#bStop').onclick=()=>{stopReq=true;status('Stopping after this step…')};
 
@@ -812,7 +938,7 @@ $('#cSfx').onchange=e=>{S.sfx=e.target.checked;saveS()};
 $('#sFont').onchange=e=>{S.font=e.target.value;saveS();drawAll()};
 async function boot(){
   $('#ver').textContent='v'+VERSION;
-  fillLangs();$('#sMode').value=S.mode;$('#sLayer').value=S.layer;$('#cShow').checked=S.show;$('#cCaps').checked=S.caps;$('#cReread').checked=S.reread;$('#cSfx').checked=S.sfx;
+  fillLangs();$('#sMode').value=S.mode;$('#sSort').innerHTML=sortOptions(S.rootSort.key);$('#sLayer').value=S.layer;$('#cShow').checked=S.show;$('#cCaps').checked=S.caps;$('#cReread').checked=S.reread;$('#cSfx').checked=S.sfx;
   try{fonts=[...fonts,...(await api('fonts')).filter(f=>!fonts.includes(f))]}catch{}
   $('#sFont').innerHTML=fontOptions(S.font,false);
   show(-1);

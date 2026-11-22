@@ -38,6 +38,13 @@ a USB stick.
 1. **Open images** (or drop image files on the window). Each page appears on the left. Click a page
    to show it; Ctrl+click and Shift+click pick several. Close pages with the ✕ that appears when you
    point at one, or right-click for **Close** (all picked pages) and **Close all other pages**.
+
+   To keep chapters apart, pick pages and press **New group** (or right-click → **New group from…**),
+   then type a name. Drag pages onto a group to add them, or right-click for **Move to** and
+   **Remove from group**. Click a group's header to collapse or expand it, double-click its name to
+   rename it, and right-click it to ungroup or close its pages. **Sort** at the top orders the loose
+   pages and the groups (by order added, name, date modified or file size, ↑/↓ for direction); each
+   group has its own sort for the pages inside it. Names sort the natural way: page 2 before page 10.
 2. **From** is **Auto-detect** and **To** is **English** unless you change them. Each bubble's card shows
    the language Inkswap detected; if it's wrong, pick the right one there and press **Re-translate**.
 3. Press **Translate page** (or **Translate all pages**). The boxes and texts appear as it works.
