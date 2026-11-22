@@ -32,9 +32,10 @@ static class Engine
         ["4b"] = new("Standard: Qwen3-VL 4B, 3.4 GB download, needs about 5 GB of graphics memory",
             Hf("Qwen3-VL-4B-Instruct-GGUF", "Qwen3VL-4B-Instruct-Q4_K_M.gguf", 2497281664, "66358cb18bb6b3b1b6675aa412c7a88ef01d228f481184d13668e5201c730a0a"),
             Hf("Qwen3-VL-4B-Instruct-GGUF", "mmproj-Qwen3VL-4B-Instruct-F16.gguf", 836180256, "256f3a43bd4205ffef48d6b92715e1e70b5b0e9aef06522584967513a9985331")),
-        ["8b"] = new("Best: Qwen3-VL 8B, 6.2 GB download, fastest with 8 GB of graphics memory (runs partly on the CPU with less)",
+        ["8b"] = new("Best: Qwen3-VL 8B, 5.8 GB download, fastest with 8 GB of graphics memory (runs partly on the CPU with less)",
             Hf("Qwen3-VL-8B-Instruct-GGUF", "Qwen3VL-8B-Instruct-Q4_K_M.gguf", 5027784800, "67d1659bfe71b89d50b45a4ad1a9e5b997e5bb16ce5da66a6a6167abd569e9e2"),
-            Hf("Qwen3-VL-8B-Instruct-GGUF", "mmproj-Qwen3VL-8B-Instruct-F16.gguf", 1159029824, "ca524100ebf825c9a870db1c580d03879e0da0ab2541697e2458e64891cf9d38")),
+            // the 8-bit vision file leaves ~400 MB more graphics memory for the model itself on 8 GB cards
+            Hf("Qwen3-VL-8B-Instruct-GGUF", "mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf", 752289728, "c6ba85508d82f42590e6eb77d5340369ab6fecf107a7561d809523d8aa5f3bfd")),
     };
 
     // read by /api/status from the UI thread while the worker writes them; plain fields are fine for a progress display
@@ -89,6 +90,9 @@ static class Engine
                 }
                 await Fetch(model.Weights, Path.Combine(ModelsDir, model.Weights.File));
                 await Fetch(model.Vision, Path.Combine(ModelsDir, model.Vision.File));
+                // model files an older version downloaded but no model uses any more (e.g. the 8B's old F16 vision file)
+                var used = Models.Values.SelectMany(v => new[] { v.Weights.File, v.Vision.File }).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var f in Directory.GetFiles(ModelsDir, "*.gguf").Where(f => !used.Contains(Path.GetFileName(f)))) File.Delete(f);
                 State = "starting";
                 Message = "Loading the model onto the graphics card...";
                 Launch(model);
