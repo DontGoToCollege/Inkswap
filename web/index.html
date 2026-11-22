@@ -36,13 +36,21 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
 #stage{position:relative;margin:16px auto;user-select:none;touch-action:none;display:none}
 #cv{display:block;width:100%;height:100%;box-shadow:0 0 0 1px var(--line)}
 #boxes.hide{display:none}
-.bx{position:absolute;border:2px solid var(--src);background:rgba(227,168,87,.08);cursor:move}
-.bx.on{border-color:var(--accent);background:rgba(79,156,249,.12)}
+/* orange dashed = erase area, green = text box; the layer not being edited is faint and can't be grabbed */
+.bx{position:absolute;cursor:move}
+.bx.er{border:2px dashed var(--src);background:rgba(227,168,87,.07)}
+.bx.tx{border:2px solid var(--dst);background:rgba(108,196,161,.08)}
+#boxes.L-box .bx.tx,#boxes.L-tbox .bx.er{pointer-events:none;opacity:.3}
+#boxes.L-box .bx.tx b,#boxes.L-tbox .bx.er b{display:none}
+.bx.on{background:rgba(79,156,249,.14)}
 .bx.hl{box-shadow:0 0 0 3px rgba(79,156,249,.6)}
-.bx b{position:absolute;left:-2px;top:-20px;background:var(--src);color:#000;font-size:11px;padding:1px 5px;border-radius:4px 4px 0 0;pointer-events:none}
+.bx b{position:absolute;left:-2px;top:-20px;color:#000;font-size:11px;padding:1px 5px;border-radius:4px 4px 0 0;pointer-events:none}
+.bx.er b{background:var(--src)} .bx.tx b{background:var(--dst)}
 .bx.on b{background:var(--accent);color:#fff}
-.bx u{position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:var(--accent);border-radius:3px;cursor:nwse-resize;display:none}
+.bx u{position:absolute;width:14px;height:14px;background:var(--accent);border:2px solid #fff;border-radius:3px;display:none}
 .bx.on u{display:block}
+.bx u.nw{left:-8px;top:-8px;cursor:nwse-resize} .bx u.se{right:-8px;bottom:-8px;cursor:nwse-resize}
+.bx u.ne{right:-8px;top:-8px;cursor:nesw-resize} .bx u.sw{left:-8px;bottom:-8px;cursor:nesw-resize}
 #draft{position:absolute;border:2px dashed var(--accent);pointer-events:none;display:none}
 #side{display:flex;flex-direction:column;border-left:1px solid var(--line);background:var(--panel);min-height:0}
 #sideHead{padding:8px 10px;border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -95,7 +103,7 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
     <button id="bStop" hidden>Stop</button>
     <span class="sep"></span>
     <label title="Show the finished page or the original"><select id="sMode"><option value="out">Translated</option><option value="orig">Original</option></select></label>
-    <label><input id="cBoxes" type="checkbox" checked> Boxes</label>
+    <label title="Which boxes you can move: green text boxes (where the translation goes) or orange erase areas (what gets removed). Press E to switch.">Boxes <select id="sLayer"><option value="tbox">Text boxes</option><option value="box">Erase areas</option><option value="hide">Hidden</option></select></label>
     <span class="sep"></span>
     <button id="bSave" title="Save this page as a PNG">Save page</button>
     <button id="bSaveAll" title="Save every translated page into a folder">Save all</button>
@@ -107,7 +115,7 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
     <div id="empty">
       <div style="font-size:16px;color:var(--text)">Open manga pages to start</div>
       <div>Use <b>Open images</b> or drop image files here. Then press <b>Translate page</b>.<br>
-      Drag on the page to add a box by hand; drag a box to move it, its corner to resize it, <b>Delete</b> removes it.</div>
+      Drag on the page to add a box by hand. Each bubble has a green <b>text box</b> (where the translation goes) and an orange <b>erase area</b> (what gets removed): pick which to move in <b>Boxes</b> or press <b>E</b>. Drag a box or its corners; arrow keys nudge it (Shift = 10px); <b>Delete</b> removes it.</div>
     </div>
     <div id="stage"><canvas id="cv"></canvas><div id="boxes"></div><div id="draft"></div></div>
   </div>
@@ -134,11 +142,11 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
 </div></div>
 <div id="toasts"></div>
 <script>
-const VERSION='1.0.4';
+const VERSION='1.1.0';
 const LANGS={ja:'Japanese',ko:'Korean',zh:'Chinese',es:'Spanish',en:'English'};
 const NO_SPACES=new Set(['ja','zh']);   // languages written without spaces between words
 const $=s=>document.querySelector(s);
-const S=Object.assign({src:'ja',dst:'en',model:'4b',font:'Comic Neue',caps:true,reread:true,sfx:false,mode:'out',boxes:true},(()=>{try{return JSON.parse(localStorage.getItem('inkswap')||'{}')}catch{return{}}})());
+const S=Object.assign({src:'ja',dst:'en',model:'4b',font:'Comic Neue',caps:true,reread:true,sfx:false,mode:'out',layer:'tbox'},(()=>{try{return JSON.parse(localStorage.getItem('inkswap')||'{}')}catch{return{}}})());
 const saveS=()=>{try{localStorage.setItem('inkswap',JSON.stringify(S))}catch{}};
 let pages=[], cur=-1, sel=null, busy=false, stopReq=false, ai={state:'stopped'};
 const cv=$('#cv'), ctx=cv.getContext('2d');
@@ -227,7 +235,7 @@ function drawPages(){
   $('#pages').querySelectorAll('.thumb').forEach(b=>b.onclick=()=>show(+b.dataset.i));
 }
 function show(i){
-  if(cur>=0&&pages[cur]&&i!==cur) delete pages[cur].data;   // keep pixel data for the open page only
+  if(cur>=0&&pages[cur]&&i!==cur){delete pages[cur].data;delete pages[cur]._clean}   // keep pixel data for the open page only
   cur=i;sel=null;
   const p=page();
   $('#empty').style.display=p?'none':'flex';
@@ -241,42 +249,45 @@ function applyZoom(){const p=page();if(!p)return;$('#stage').style.width=p.w*zoo
 $('#view').addEventListener('wheel',e=>{if(!e.ctrlKey||!page())return;e.preventDefault();zoom=Math.max(.1,Math.min(4,zoom*(e.deltaY<0?1.15:1/1.15)));applyZoom()},{passive:false});
 addEventListener('resize',()=>fitZoom());
 
-/* ---------------- image analysis: what to erase, text colour, room for the new text ---------------- */
+/* ---------------- image analysis: what to erase, text colour, where the new text fits ---------------- */
+// Each item has two rectangles in image pixels: box = the erase area (also what Re-read looks at) and
+// tbox = where the translation is lettered. tbox is fitted once and then only moves when the user moves it.
 function pageData(p){
   if(!p.data){const c=new OffscreenCanvas(p.w,p.h),g=c.getContext('2d',{willReadFrequently:true});g.drawImage(p.img,0,0);p.data=g.getImageData(0,0,p.w,p.h)}
   return p.data;
 }
 function dist(d,i,r,g,b){const x=d[i]-r,y=d[i+1]-g,z=d[i+2]-b;return Math.sqrt(x*x+y*y+z*z)}
 function newItem(p,box,text=''){
-  return {id:p.nextId++,box,text,trans:'',font:'',size:0,bold:true,outline:false,erase:'auto',fit:'bubble',fg:null,fgUser:false};
+  return {id:p.nextId++,box,tbox:null,text,trans:'',font:'',size:0,bold:true,outline:false,erase:'auto',fg:null,fgUser:false};
 }
-// shortcut: fills erased text from the pixels around it (fine on flat bubbles, smudgy over detailed art); add a LaMa inpainting model if art backgrounds matter
+// shortcut: text over detailed art is filled from the pixels around it (smudgy); add a LaMa inpainting model if art backgrounds matter
 function analyze(p,it){
-  const key=it.box.map(Math.round).join()+it.erase+it.fit;
+  const key=it.box.map(Math.round).join()+it.erase;
   if(it._key===key) return;
   it._key=key;
-  const d=pageData(p).data,W=p.w,pad=4;
-  let [x1,y1,x2,y2]=it.box.map(Math.round);
-  x1=Math.max(0,x1-pad);y1=Math.max(0,y1-pad);x2=Math.min(W,x2+pad);y2=Math.min(p.h,y2+pad);
+  const d=pageData(p).data,W=p.w;
+  const [bx1,by1,bx2,by2]=it.box.map(Math.round);
+  // look a little past the erase area, so text it clips at the edge is still erased
+  const pad=Math.max(6,Math.round(Math.max(bx2-bx1,by2-by1)*.05));
+  const x1=Math.max(0,bx1-pad),y1=Math.max(0,by1-pad),x2=Math.min(W,bx2+pad),y2=Math.min(p.h,by2+pad);
   const rw=x2-x1,rh=y2-y1;
-  it.area=[...it.box];it._patch=null;
-  if(rw<3||rh<3) return;
+  it._w=null;it._fit=[...it.box];
+  if(bx2-bx1<3||by2-by1<3) return;
   // background = the most common colour in the box: the bubble's paper, whether the box is tight or loose
   const counts=new Map(),q=i=>(d[i]>>4)<<8|(d[i+1]>>4)<<4|(d[i+2]>>4);
-  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){const k=q((y*W+x)*4);counts.set(k,(counts.get(k)||0)+1)}
+  for(let y=by1;y<by2;y++)for(let x=bx1;x<bx2;x++){const k=q((y*W+x)*4);counts.set(k,(counts.get(k)||0)+1)}
   let bk=0,best=0;for(const[k,c]of counts)if(c>best){best=c;bk=k}
   let r=0,g=0,b=0,n=0,near=0;
-  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){const i=(y*W+x)*4;if(q(i)===bk){r+=d[i];g+=d[i+1];b+=d[i+2];n++}}
+  for(let y=by1;y<by2;y++)for(let x=bx1;x<bx2;x++){const i=(y*W+x)*4;if(q(i)===bk){r+=d[i];g+=d[i+1];b+=d[i+2];n++}}
   r/=n;g/=n;b/=n;
-  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++)if(dist(d,(y*W+x)*4,r,g,b)<40)near++;
-  const flat=near/(rw*rh)>0.45;
+  for(let y=by1;y<by2;y++)for(let x=bx1;x<bx2;x++)if(dist(d,(y*W+x)*4,r,g,b)<40)near++;
+  const flat=near/((bx2-bx1)*(by2-by1))>0.45;
   it.bg=hex(r,g,b);
   const bubble=flat?findBubble(p,it.box,[x1,y1,x2,y2],[r,g,b]):null;
-  // text pixels = clearly unlike the background, and inside the bubble when there is one (in a bubble, as
-  // unlike as findBubble's paper test, or the faint inner edge of the outline would count as text)
-  const mask=new Uint8Array(rw*rh),cut=bubble?60:50;
+  // text pixels = clearly unlike the background (inside the bubble when there is one)
+  const mask=new Uint8Array(rw*rh),cut=bubble?60:45;
   for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){const o=y*rw+x;if((!bubble||bubble.inside[o])&&dist(d,((y+y1)*W+x+x1)*4,r,g,b)>cut)mask[o]=1}
-  if(!bubble) dropBorderShapes(mask,rw,rh);   // an outline or panel edge cut by the box is not text
+  if(!bubble) dropBorderShapes(mask,rw,rh);   // a panel edge or outline running through the box is not text
   // lettering colour and where the text really is both come from the solid core of the strokes
   let fr=0,fg=0,fb=0,fn=0,tx1=rw,ty1=rh,tx2=-1,ty2=-1;
   for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
@@ -287,19 +298,40 @@ function analyze(p,it){
     fr+=d[i];fg+=d[i+1];fb+=d[i+2];fn++;
   }
   if(!it.fgUser){it.fg=fn>8?hex(fr/fn,fg/fn,fb/fn):(lum(r,g,b)>128?'#000000':'#ffffff');it.outline=!flat}   // text over art reads better with a halo
-  for(let k=0;k<2;k++){const m2=mask.slice();for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){const o=y*rw+x;if(!mask[o]&&(!bubble||bubble.inside[o])&&((x>0&&mask[o-1])||(x<rw-1&&mask[o+1])||(y>0&&mask[o-rw])||(y<rh-1&&mask[o+rw])))m2[o]=1}mask.set(m2)}
-  if(it.erase!=='off'){
-    const patch=new ImageData(rw,rh),pd=patch.data;
-    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){const i=((y+y1)*W+x+x1)*4,o=(y*rw+x)*4;pd[o]=d[i];pd[o+1]=d[i+1];pd[o+2]=d[i+2];pd[o+3]=255}
-    if(it.erase==='box'){for(let o=0;o<pd.length;o+=4){pd[o]=r;pd[o+1]=g;pd[o+2]=b}}
-    else inpaint(pd,mask,rw,rh,[r,g,b]);
-    it._patch=patch;it._at=[x1,y1];
+  if(bubble){const a=bubble.area;it._fit=tx2<0?a:[Math.min(a[0],x1+tx1),Math.min(a[1],y1+ty1),Math.max(a[2],x1+tx2+1),Math.max(a[3],y1+ty2+1)]}
+  if(it.erase==='off') return;
+  // what to write over the page: a mask of region pixels and the colour for each
+  const m=new Uint8Array(rw*rh),px=new Uint8ClampedArray(rw*rh*3);
+  const fill=o=>{m[o]=1;px[o*3]=r;px[o*3+1]=g;px[o*3+2]=b};
+  if(it.erase==='box'){
+    for(let y=by1-y1;y<by2-y1;y++)for(let x=bx1-x1;x<bx2-x1;x++)fill(y*rw+x);
+  }else if(bubble){
+    // white out the bubble's paper inside the erase area, stopping 2px short of the outline
+    const keep=bubble.inside.slice();
+    for(let k=0;k<2;k++){const s=keep.slice();for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){const o=y*rw+x;if(s[o]&&((x>0&&!s[o-1])||(x<rw-1&&!s[o+1])||(y>0&&!s[o-rw])||(y<rh-1&&!s[o+rw])))keep[o]=0}}
+    for(let o=0;o<keep.length;o++)if(keep[o])fill(o);
+  }else{
+    for(let k=0;k<3;k++){const m2=mask.slice();for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){const o=y*rw+x;if(!mask[o]&&((x>0&&mask[o-1])||(x<rw-1&&mask[o+1])||(y>0&&mask[o-rw])||(y<rh-1&&mask[o+rw])))m2[o]=1}mask.set(m2)}
+    const pd=new Uint8ClampedArray(rw*rh*4);
+    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){const i=((y+y1)*W+x+x1)*4,o=(y*rw+x)*4;pd[o]=d[i];pd[o+1]=d[i+1];pd[o+2]=d[i+2]}
+    m.set(mask);inpaint(pd,mask,rw,rh,[r,g,b]);
+    for(let o=0;o<m.length;o++)if(m[o]){px[o*3]=pd[o*4];px[o*3+1]=pd[o*4+1];px[o*3+2]=pd[o*4+2]}
   }
-  if(it.fit==='bubble'&&bubble){
-    const a=bubble.area;
-    it.area=tx2<0?a:[Math.min(a[0],x1+tx1),Math.min(a[1],y1+ty1),Math.max(a[2],x1+tx2+1),Math.max(a[3],y1+ty2+1)];
-  }
+  it._w={x1,y1,rw,m,px};
 }
+// the page with every erase area applied to one copy, so overlapping areas never paste original text back
+function cleanPage(p){
+  const key=p.items.map(it=>it.id+':'+it._key).join('|');
+  if(p._clean&&p._cleanKey===key) return p._clean;
+  const D=pageData(p),c=new ImageData(new Uint8ClampedArray(D.data),p.w,p.h),d=c.data;
+  for(const it of p.items){
+    const w=it._w;if(!w)continue;
+    for(let o=0;o<w.m.length;o++)if(w.m[o]){const i=((w.y1+((o/w.rw)|0))*p.w+w.x1+o%w.rw)*4;d[i]=w.px[o*3];d[i+1]=w.px[o*3+1];d[i+2]=w.px[o*3+2]}
+  }
+  p._clean=c;p._cleanKey=key;
+  return c;
+}
+function ensureFit(p,it){analyze(p,it);if(!it.tbox)it.tbox=[...it._fit]}
 function dropBorderShapes(mask,w,h){
   const seen=new Uint8Array(w*h);
   const starts=[];for(let x=0;x<w;x++)starts.push(x,(h-1)*w+x);for(let y=0;y<h;y++)starts.push(y*w,y*w+w-1);
@@ -309,7 +341,9 @@ function dropBorderShapes(mask,w,h){
     for(let k=0;k<comp.length;k++){const o=comp[k],x=o%w,y=(o/w)|0;
       if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;
       for(const j of[x>0?o-1:-1,x<w-1?o+1:-1,y>0?o-w:-1,y<h-1?o+w:-1])if(j>=0&&mask[j]&&!seen[j]){seen[j]=1;comp.push(j)}}
-    if(maxx-minx>w*.4||maxy-miny>h*.4)for(const o of comp)mask[o]=0;
+    // long thin shapes crossing most of the region are edges; a column of vertical text is not thin
+    const span=Math.max((maxx-minx)/w,(maxy-miny)/h),thin=comp.length<((maxx-minx+1)*(maxy-miny+1))*.25;
+    if(span>.6&&thin)for(const o of comp)mask[o]=0;
   }
 }
 // fills masked pixels from the outside in with the average of their already-known neighbours
@@ -326,7 +360,7 @@ function inpaint(pd,mask,w,h,bg){
   }
 }
 // Floods the paper colour out from the middle of the box to find the speech bubble. Returns the room for
-// lettering and which pixels of the box region are inside the bubble, or null if it isn't a closed bubble.
+// lettering and which pixels of the region are inside the bubble, or null if it isn't a closed bubble.
 function findBubble(p,[bx1,by1,bx2,by2],[x1,y1,x2,y2],[r,g,b]){
   const d=pageData(p).data,W=p.w,H=p.h,ex=Math.max(x2-x1,y2-y1);
   const sx1=Math.max(0,x1-ex),sy1=Math.max(0,y1-ex),sx2=Math.min(W,x2+ex),sy2=Math.min(H,y2+ex),sw=sx2-sx1,sh=sy2-sy1;
@@ -384,7 +418,7 @@ function layout(g,text,w,h,font,bold,fixed){
 }
 function letter(g,it){
   const text=letterText(it);if(!text)return;
-  const [x1,y1,x2,y2]=it.area,w=x2-x1,h=y2-y1,font=it.font||S.font;
+  const [x1,y1,x2,y2]=it.tbox,w=x2-x1,h=y2-y1,font=it.font||S.font;
   const L=layout(g,text,w,h,font,it.bold,it.size||0);
   g.font=`${it.bold?700:400} ${L.s}px "${font}"`;
   g.textAlign='center';g.textBaseline='middle';g.lineJoin='round';
@@ -397,10 +431,9 @@ function letter(g,it){
 }
 const rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
 async function render(g,p,mode){
-  g.drawImage(p.img,0,0);
-  if(mode==='orig') return;
-  for(const it of p.items) analyze(p,it);
-  for(const it of p.items) if(it._patch&&(it.trans||'').trim()) g.putImageData(it._patch,it._at[0],it._at[1]);
+  if(mode==='orig'){g.drawImage(p.img,0,0);return}
+  for(const it of p.items) ensureFit(p,it);
+  g.putImageData(cleanPage(p),0,0);
   await Promise.all([...new Set(p.items.map(it=>it.font||S.font))].map(f=>document.fonts.load(`700 20px "${f}"`).catch(()=>{})));
   for(const it of p.items) letter(g,it);
 }
@@ -412,12 +445,24 @@ function drawCanvas(){
 }
 
 /* ---------------- boxes on the page ---------------- */
+// Both rectangles are drawn; only the layer picked in the Boxes menu (or toggled with E) can be grabbed.
+const place=(el,p,[x1,y1,x2,y2])=>Object.assign(el.style,{left:x1/p.w*100+'%',top:y1/p.h*100+'%',width:(x2-x1)/p.w*100+'%',height:(y2-y1)/p.h*100+'%'});
 function drawBoxes(){
-  const p=page(),el=$('#boxes');el.classList.toggle('hide',!S.boxes);
+  const p=page(),el=$('#boxes');
+  el.className=S.layer==='hide'?'hide':'L-'+S.layer;
   if(!p){el.innerHTML='';return}
-  el.innerHTML=p.items.map((it,n)=>{const[x1,y1,x2,y2]=it.box;
-    return `<div class="bx${it===sel?' on':''}" data-id="${it.id}" style="left:${x1/p.w*100}%;top:${y1/p.h*100}%;width:${(x2-x1)/p.w*100}%;height:${(y2-y1)/p.h*100}%"><b>${n+1}</b><u></u></div>`}).join('');
+  el.innerHTML='';
+  p.items.forEach((it,n)=>{
+    ensureFit(p,it);
+    for(const k of['box','tbox']){
+      const b=document.createElement('div');
+      b.className=`bx ${k==='box'?'er':'tx'}${it===sel?' on':''}`;b.dataset.id=it.id;b.dataset.k=k;
+      b.innerHTML=`<b>${n+1}</b><u class="nw"></u><u class="ne"></u><u class="sw"></u><u class="se"></u>`;
+      place(b,p,it[k]);el.append(b);
+    }
+  });
 }
+function setLayer(l){S.layer=l;saveS();$('#sLayer').value=l;drawBoxes()}
 function select(it,scroll){
   sel=it;
   document.querySelectorAll('.bx').forEach(b=>b.classList.toggle('on',+b.dataset.id===it?.id));
@@ -429,38 +474,48 @@ let drag=null;
 $('#stage').addEventListener('pointerdown',e=>{
   const p=page();if(!p||e.button!==0)return;
   const [x,y]=imgPt(e),bx=e.target.closest('.bx');
-  if(bx&&S.boxes){
-    const it=p.items.find(i=>i.id===+bx.dataset.id);select(it,true);
-    drag={it,mode:e.target.tagName==='U'?'size':'move',x,y,box:[...it.box]};
+  if(bx&&S.layer!=='hide'){
+    const it=p.items.find(i=>i.id===+bx.dataset.id),k=bx.dataset.k;select(it,true);
+    drag={it,k,mode:e.target.tagName==='U'?e.target.className:'move',x,y,orig:[...it[k]],el:bx};
   }else{select(null);drag={mode:'new',x,y}}
   e.preventDefault();
 });
 addEventListener('pointermove',e=>{
   if(!drag)return;const p=page(),[x,y]=imgPt(e),dx=x-drag.x,dy=y-drag.y;
   if(drag.mode==='new'){
-    const d=$('#draft'),l=Math.min(x,drag.x),t=Math.min(y,drag.y);
-    Object.assign(d.style,{display:'block',left:l/p.w*100+'%',top:t/p.h*100+'%',width:Math.abs(dx)/p.w*100+'%',height:Math.abs(dy)/p.h*100+'%'});
+    const l=Math.min(x,drag.x),t=Math.min(y,drag.y);
+    $('#draft').style.display='block';place($('#draft'),p,[l,t,l+Math.abs(dx),t+Math.abs(dy)]);
     return;
   }
-  const b=drag.box,it=drag.it;
-  it.box=drag.mode==='move'?[b[0]+dx,b[1]+dy,b[2]+dx,b[3]+dy]:[b[0],b[1],Math.max(b[0]+8,b[2]+dx),Math.max(b[1]+8,b[3]+dy)];
-  const el=document.querySelector(`.bx[data-id="${it.id}"]`);
-  Object.assign(el.style,{left:it.box[0]/p.w*100+'%',top:it.box[1]/p.h*100+'%',width:(it.box[2]-it.box[0])/p.w*100+'%',height:(it.box[3]-it.box[1])/p.h*100+'%'});
+  const b=drag.orig,c=drag.mode;let [x1,y1,x2,y2]=b;
+  if(c==='move'){x1+=dx;x2+=dx;y1+=dy;y2+=dy}
+  else{if(c.includes('w'))x1=Math.min(b[0]+dx,b[2]-8);if(c.includes('e'))x2=Math.max(b[2]+dx,b[0]+8);if(c.includes('n'))y1=Math.min(b[1]+dy,b[3]-8);if(c.includes('s'))y2=Math.max(b[3]+dy,b[1]+8)}
+  drag.it[drag.k]=[x1,y1,x2,y2];place(drag.el,p,drag.it[drag.k]);
 });
 addEventListener('pointerup',async e=>{
   if(!drag)return;const p=page(),d=drag;drag=null;$('#draft').style.display='none';
-  if(d.mode!=='new'){d.it.box=clampBox(p,d.it.box);dirty(true);drawCanvas();return}
+  if(d.mode!=='new'){d.it[d.k]=clampBox(p,d.it[d.k]);place(d.el,p,d.it[d.k]);if(''+d.it[d.k]!==''+d.orig){dirty(true);drawCanvas()}return}
   const [x,y]=imgPt(e);
   if(Math.abs(x-d.x)<8||Math.abs(y-d.y)<8)return;
   const it=newItem(p,clampBox(p,[Math.min(x,d.x),Math.min(y,d.y),Math.max(x,d.x),Math.max(y,d.y)]));
   p.items.push(it);dirty(true);drawAll();select(it,true);
   if(ready()&&!busy) guard(async()=>{await rereadItem(p,it);await translateItems(p,[it])});
 });
-function clampBox(p,[x1,y1,x2,y2]){const w=x2-x1,h=y2-y1;x1=Math.max(0,Math.min(p.w-w,x1));y1=Math.max(0,Math.min(p.h-h,y1));return[x1,y1,Math.min(p.w,x1+w),Math.min(p.h,y1+h)]}
+function clampBox(p,[x1,y1,x2,y2]){const w=Math.min(p.w,x2-x1),h=Math.min(p.h,y2-y1);x1=Math.max(0,Math.min(p.w-w,x1));y1=Math.max(0,Math.min(p.h-h,y1));return[x1,y1,x1+w,y1+h]}
 addEventListener('keydown',e=>{
-  if(e.target.matches('textarea,input,select'))return;
-  if((e.key==='Delete'||e.key==='Backspace')&&sel){const p=page();p.items=p.items.filter(i=>i!==sel);sel=null;dirty(true);drawAll()}
+  if(e.target.matches?.('textarea,input,select'))return;
+  const p=page();if(!p)return;
+  if((e.key==='Delete'||e.key==='Backspace')&&sel){p.items=p.items.filter(i=>i!==sel);sel=null;dirty(true);drawAll()}
   if(e.key==='Escape')select(null);
+  if(e.key==='e'||e.key==='E')setLayer(S.layer==='box'?'tbox':'box');
+  const arrows={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+  if(arrows&&sel&&S.layer!=='hide'){
+    e.preventDefault();
+    const s=e.shiftKey?10:1,k=S.layer,b=sel[k];
+    sel[k]=clampBox(p,[b[0]+arrows[0]*s,b[1]+arrows[1]*s,b[2]+arrows[0]*s,b[3]+arrows[1]*s]);
+    const el=document.querySelector(`.bx[data-id="${sel.id}"][data-k="${k}"]`);if(el)place(el,p,sel[k]);
+    dirty(true);drawCanvas();
+  }
 });
 
 /* ---------------- the readable pane ---------------- */
@@ -482,14 +537,14 @@ function drawCards(){
       <span>Colour</span><input type="color" data-f="fg" value="${it.fg||'#000000'}">
       <span>Bold</span><input type="checkbox" data-f="bold" ${it.bold?'checked':''}>
       <span>Outline</span><input type="checkbox" data-f="outline" ${it.outline?'checked':''}>
-      <span>Erase</span><select data-f="erase"><option value="auto">Original text only</option><option value="box">Whole box</option><option value="off">Nothing</option></select>
-      <span>Fit text to</span><select data-f="fit"><option value="bubble">The whole bubble</option><option value="box">Just this box</option></select>
+      <span>Erase</span><select data-f="erase" title="What to remove inside the orange erase area"><option value="auto">Original text only</option><option value="box">Everything in the area</option><option value="off">Nothing</option></select>
+      <span>Text box</span><button data-a="fit" title="Put the green text box back where Inkswap fits it: the bubble around the erase area">Fit to bubble again</button>
     </div></details></div>`).join('');
   el.querySelectorAll('.card').forEach(c=>{
     const it=p.items.find(i=>i.id===+c.dataset.id);
-    c.querySelector('[data-f=erase]').value=it.erase;c.querySelector('[data-f=fit]').value=it.fit;
-    c.onmouseenter=()=>document.querySelector(`.bx[data-id="${it.id}"]`)?.classList.add('hl');
-    c.onmouseleave=()=>document.querySelector(`.bx[data-id="${it.id}"]`)?.classList.remove('hl');
+    c.querySelector('[data-f=erase]').value=it.erase;
+    const hl=on=>document.querySelectorAll(`.bx[data-id="${it.id}"]`).forEach(b=>b.classList.toggle('hl',on));
+    c.onmouseenter=()=>hl(true);c.onmouseleave=()=>hl(false);
     c.onfocusin=()=>select(it);
     c.querySelectorAll('[data-f]').forEach(inp=>inp.addEventListener(inp.tagName==='TEXTAREA'||inp.type==='number'?'input':'change',()=>{
       const f=inp.dataset.f;
@@ -500,6 +555,7 @@ function drawCards(){
     c.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{
       const a=b.dataset.a;
       if(a==='del'){p.items=p.items.filter(i=>i!==it);if(sel===it)sel=null;dirty(true);drawAll();return}
+      if(a==='fit'){it._key=null;analyze(p,it);it.tbox=[...it._fit];dirty(true);drawBoxes();drawCanvas();return}
       guard(async()=>{if(a==='reread')await rereadItem(p,it);await translateItems(p,[it])});
     });
   });
@@ -614,7 +670,7 @@ $('#bSaveAll').onclick=async()=>{
       status(`Saving ${outName(p)}…`);
       const f=await dir.getFileHandle(outName(p),{create:true}),w=await f.createWritable();
       await w.write(await renderBlob(p));await w.close();n++;
-      if(p!==page())delete p.data;
+      if(p!==page()){delete p.data;delete p._clean}
     }
   }catch(e){toast(`Saving stopped after ${n} page${n===1?'':'s'}: ${e.message}`,true);status('Save failed');return}
   status(`Saved ${n} page${n===1?'':'s'}`);toast(`Saved ${n} translated page${n===1?'':'s'}.`);dirty(false);
@@ -628,14 +684,14 @@ function fillLangs(){
 $('#sSrc').onchange=e=>{S.src=e.target.value;saveS();drawCards()};
 $('#sDst').onchange=e=>{S.dst=e.target.value;saveS();drawAll()};
 $('#sMode').onchange=e=>{S.mode=e.target.value;saveS();drawCanvas()};
-$('#cBoxes').onchange=e=>{S.boxes=e.target.checked;saveS();drawBoxes()};
+$('#sLayer').onchange=e=>setLayer(e.target.value);
 $('#cCaps').onchange=e=>{S.caps=e.target.checked;saveS();drawCanvas()};
 $('#cReread').onchange=e=>{S.reread=e.target.checked;saveS()};
 $('#cSfx').onchange=e=>{S.sfx=e.target.checked;saveS()};
 $('#sFont').onchange=e=>{S.font=e.target.value;saveS();drawAll()};
 async function boot(){
   $('#ver').textContent='v'+VERSION;
-  fillLangs();$('#sMode').value=S.mode;$('#cBoxes').checked=S.boxes;$('#cCaps').checked=S.caps;$('#cReread').checked=S.reread;$('#cSfx').checked=S.sfx;
+  fillLangs();$('#sMode').value=S.mode;$('#sLayer').value=S.layer;$('#cCaps').checked=S.caps;$('#cReread').checked=S.reread;$('#cSfx').checked=S.sfx;
   try{fonts=[...fonts,...(await api('fonts')).filter(f=>!fonts.includes(f))]}catch{}
   $('#sFont').innerHTML=fontOptions(S.font,false);
   show(-1);

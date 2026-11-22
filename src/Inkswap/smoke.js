@@ -44,8 +44,34 @@
   if (after === before) throw new Error('the page did not change after typing a translation');
   // the original glyph strokes must be gone: sample the middle of テ's top bar
   const px = document.querySelector('#cv').getContext('2d').getImageData(0, 0, 400, 300);
-  const area = it.area.map(Math.round);
-  if (!(area[2] - area[0] > 140)) throw new Error('text area did not grow to the bubble: ' + area);
+  const area = it.tbox.map(Math.round);
+  if (!(area[2] - area[0] > 140)) throw new Error('text box did not grow to the bubble: ' + area);
+  // nudging the erase area (E switches to it, arrows move it) must leave the text box where it is
+  const key = k => dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+  const layer = document.querySelector('#sLayer');
+  layer.value = 'tbox'; layer.dispatchEvent(new Event('change'));   // don't depend on the saved setting
+  key('e'); key('ArrowLeft'); key('ArrowLeft'); key('ArrowLeft');
+  await sleep(300);
+  if (Math.round(it.box[0]) !== 127) throw new Error('arrow keys did not move the erase area: ' + it.box);
+  if (it.tbox.map(Math.round).join() !== area.join()) throw new Error('moving the erase area moved the text: ' + it.tbox);
+  key('e');
+  // dragging the selected text box's bottom-right corner resizes only the text box
+  const drag = (el, x2, y2) => {
+    const b = el.getBoundingClientRect(), sx = b.left + b.width / 2, sy = b.top + b.height / 2;
+    el.dispatchEvent(new PointerEvent('pointerdown', { clientX: sx, clientY: sy, bubbles: true, button: 0 }));
+    dispatchEvent(new PointerEvent('pointermove', { clientX: sx + x2, clientY: sy + y2, bubbles: true }));
+    dispatchEvent(new PointerEvent('pointerup', { clientX: sx + x2, clientY: sy + y2, bubbles: true }));
+  };
+  const boxBefore = it.box.join();
+  drag(document.querySelector(`.bx.tx[data-id="${it.id}"] u.se`), -20, -10);
+  if (it.tbox[2] >= area[2] || it.box.join() !== boxBefore) throw new Error('corner drag went wrong: ' + it.tbox + ' / ' + it.box);
+  // in the erase layer, dragging the orange area moves it and leaves the text box alone
+  const tboxBefore = it.tbox.join();
+  key('e');
+  await sleep(100);
+  drag(document.querySelector(`.bx.er[data-id="${it.id}"]`), 15, 0);
+  if (!(it.box[0] > 130) || it.tbox.join() !== tboxBefore) throw new Error('erase area drag went wrong: ' + it.box + ' / ' + it.tbox);
+  key('e');
   // a reply that repeats itself and is cut off mid-entry still gives its finished, distinct bubbles
   const cutOff = '{"items": [\n {"bbox_2d": [10, 20, 300, 400], "text": "お前は\\"誰\\"だ"},\n' +
     ' {"bbox_2d": [500, 20, 900, 400], "text": "待って"},\n {"bbox_2d": [12, 22, 301, 398], "text": "お前は\\"誰\\"だ"},\n {"bbox_2d": [12, 2';

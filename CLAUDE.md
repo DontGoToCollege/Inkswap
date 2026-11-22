@@ -10,6 +10,9 @@ Offline manga translator: WPF + WebView2 shell (copied from SpliceBench) around 
 - `src/Inkswap/Engine.cs` downloads llama.cpp (Vulkan build, pinned `LlamaBuild`) and the Qwen3-VL
   GGUF + mmproj files (pinned URL, size and SHA-256), then runs `llama-server` on 127.0.0.1 with a
   free port, in a kill-on-close job. Its log is `Inkswap-Data\llama.log`.
+- Each item has two rectangles: `box` = erase area (also what Re-read crops) and `tbox` = text box,
+  fitted once by `ensureFit` and then only moved by the user. All erase areas are applied to one
+  copy of the page (`cleanPage`), so overlapping areas can't paste original pixels back.
 - Pipeline per page: one vision call finds boxes + text (`bbox_2d`, 0 to 1000 coordinates, JSON
   schema enforced), optionally one call per box re-reads a close crop, then one text call
   translates all bubbles together (JSON array of the same length).

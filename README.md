@@ -38,11 +38,18 @@ a USB stick.
 2. Pick the language **From** and **To**.
 3. Press **Translate page** (or **Translate all pages**). The boxes and texts appear as it works.
 4. Check the pane on the right. Edit any original text or translation; **Re-read** and
-   **Re-translate** redo one bubble. Drag on the page to add a box the AI missed, drag a box to
-   move it, drag its corner to resize it, and press Delete to remove it.
-5. **Save page** saves a PNG; **Save all** saves every translated page into a folder you pick.
+   **Re-translate** redo one bubble. Drag on the page to add a box the AI missed.
+5. Adjust the boxes if needed. Each bubble has two:
+   - a green **text box**: where the translation is lettered. It stays where you put it.
+   - an orange **erase area**: what gets removed from the original. Inside a speech bubble it
+     clears everything up to the outline, so it doesn't have to fit the text exactly.
 
-Switch the view to **Original** to compare, and untick **Boxes** to see the clean result.
+   Pick which ones to move in the **Boxes** menu (or press **E** to switch). Drag a box to move it,
+   drag any corner to resize it, use the arrow keys to nudge it (hold Shift for 10 pixels) and press
+   Delete to remove it. **Fit to bubble again** (under Lettering) puts a text box back.
+6. **Save page** saves a PNG; **Save all** saves every translated page into a folder you pick.
+
+Switch the view to **Original** to compare, and set **Boxes** to **Hidden** to see the clean result.
 
 ## Limits
 
