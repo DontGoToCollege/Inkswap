@@ -51,6 +51,8 @@ Switch the view to **Original** to compare, and untick **Boxes** to see the clea
   letters), so Inkswap matches the colour, size and placement and uses a comic lettering font.
 - Translated text is always lettered horizontally.
 - Work isn't saved between sessions. Save your pages before closing.
+- **Save all** can't save into Windows system folders such as AppData; pick a normal folder like
+  Pictures or Documents.
 
 ## Building
 

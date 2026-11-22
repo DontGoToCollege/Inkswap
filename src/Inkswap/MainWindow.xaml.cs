@@ -71,7 +71,9 @@ public partial class MainWindow : Window
         {
             var options = new CoreWebView2EnvironmentOptions(
                 "--disable-background-networking --disable-component-update --disable-domain-reliability " +
-                "--no-pings --disable-features=msSmartScreenProtection,AutofillServerCommunication,CalculateNativeWinOcclusion");
+                "--no-pings --disable-features=msSmartScreenProtection,AutofillServerCommunication,CalculateNativeWinOcclusion " +
+                // WebView2 skips this variable when an app sets its own arguments; honour it (used for testing)
+                Environment.GetEnvironmentVariable("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"));
             _env = await CoreWebView2Environment.CreateAsync(null, PortablePaths.WebViewDir, options);
             var bg = ((SolidColorBrush)Background).Color;
             Web.DefaultBackgroundColor = System.Drawing.Color.FromArgb(255, bg.R, bg.G, bg.B);
