@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inkswap</title>
+<style>
+@font-face{font-family:"Comic Neue";src:url(fonts/ComicNeue-Regular.ttf);font-weight:400}
+@font-face{font-family:"Comic Neue";src:url(fonts/ComicNeue-Bold.ttf);font-weight:700}
+@font-face{font-family:"Bangers";src:url(fonts/Bangers-Regular.ttf)}
+:root{--bg:#0e1116;--panel:#161b22;--panel2:#1d232c;--line:#2a313c;--text:#dbe1ec;--dim:#8b95a5;--accent:#4f9cf9;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--src:#e3a857;--dst:#6cc4a1}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px "Segoe UI",system-ui,sans-serif;overflow:hidden}
+button,select,input,textarea{font:inherit;color:inherit}
+button{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+select,input[type=number],input[type=text]{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
+textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px;resize:vertical;min-height:38px}
+#app{display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:150px 1fr 380px;height:100%}
+#top{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+#top .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+#top label{display:flex;align-items:center;gap:4px;color:var(--dim)}
+#top .grow{flex:1}
+#aiPill{display:flex;align-items:center;gap:6px}
+#aiPill i{width:9px;height:9px;border-radius:50%;background:var(--dim);display:inline-block}
+#aiPill.ready i{background:var(--ok)} #aiPill.busy i{background:var(--warn)} #aiPill.error i{background:var(--bad)}
+#pages{overflow-y:auto;border-right:1px solid var(--line);padding:6px;background:var(--panel)}
+.thumb{display:block;width:100%;margin-bottom:8px;border:2px solid transparent;border-radius:6px;padding:0;background:none;overflow:hidden;text-align:left}
+.thumb.on{border-color:var(--accent)}
+.thumb img{display:block;width:100%}
+.thumb span{display:block;padding:2px 4px;font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thumb span b{color:var(--ok);font-weight:600}
+#view{position:relative;overflow:auto;background:#0a0c10}
+#empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--dim);gap:10px;text-align:center;padding:20px}
+#stage{position:relative;margin:16px auto;user-select:none;touch-action:none;display:none}
+#cv{display:block;width:100%;height:100%;box-shadow:0 0 0 1px var(--line)}
+#boxes.hide{display:none}
+.bx{position:absolute;border:2px solid var(--src);background:rgba(227,168,87,.08);cursor:move}
+.bx.on{border-color:var(--accent);background:rgba(79,156,249,.12)}
+.bx.hl{box-shadow:0 0 0 3px rgba(79,156,249,.6)}
+.bx b{position:absolute;left:-2px;top:-20px;background:var(--src);color:#000;font-size:11px;padding:1px 5px;border-radius:4px 4px 0 0;pointer-events:none}
+.bx.on b{background:var(--accent);color:#fff}
+.bx u{position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:var(--accent);border-radius:3px;cursor:nwse-resize;display:none}
+.bx.on u{display:block}
+#draft{position:absolute;border:2px dashed var(--accent);pointer-events:none;display:none}
+#side{display:flex;flex-direction:column;border-left:1px solid var(--line);background:var(--panel);min-height:0}
+#sideHead{padding:8px 10px;border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#sideHead h3{margin:0;font-size:13px;flex:1}
+#cards{overflow-y:auto;padding:8px;flex:1}
+#cards .hint{color:var(--dim);padding:10px;line-height:1.5}
+.card{border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px;background:var(--panel2)}
+.card.on{border-color:var(--accent)}
+.card .hd{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.card .num{background:var(--src);color:#000;font-weight:700;border-radius:4px;padding:0 6px}
+.card.on .num{background:var(--accent);color:#fff}
+.card .hd .grow{flex:1}
+.card .hd button{padding:2px 7px;font-size:12px}
+.lab{font-size:11px;font-weight:600;letter-spacing:.04em;margin:4px 0 2px}
+.lab.s{color:var(--src)} .lab.d{color:var(--dst)}
+.card textarea.src{border-left:3px solid var(--src)}
+.card textarea.dst{border-left:3px solid var(--dst)}
+.card details{margin-top:6px;color:var(--dim)}
+.card details summary{cursor:pointer}
+.style{display:grid;grid-template-columns:auto 1fr;gap:5px 8px;align-items:center;margin-top:6px}
+.style select,.style input{width:100%}
+#bar{grid-column:1/-1;display:flex;gap:10px;align-items:center;padding:5px 10px;background:var(--panel);border-top:1px solid var(--line);color:var(--dim);min-height:30px}
+#bar .grow{flex:1}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:10}
+#modal.on{display:flex}
+#modal .box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;width:min(560px,94vw);line-height:1.5}
+#modal h2{margin:0 0 8px;font-size:17px}
+#modal label.m{display:flex;gap:8px;align-items:flex-start;padding:8px;border:1px solid var(--line);border-radius:6px;margin:6px 0;cursor:pointer}
+#modal label.m em{color:var(--ok);font-style:normal;margin-left:6px}
+#modal progress{width:100%;height:10px;margin-top:10px}
+#mMsg{white-space:pre-wrap;color:var(--dim);margin-top:6px;max-height:160px;overflow:auto}
+#modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+#toasts{position:fixed;right:400px;bottom:40px;display:flex;flex-direction:column;gap:6px;z-index:20}
+.toast{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--accent);padding:8px 12px;border-radius:6px;max-width:420px;white-space:pre-wrap}
+.toast.bad{border-left-color:var(--bad)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <button id="bOpen" class="primary" title="Open one or more images (or drop them on the window)">Open images</button>
+    <input id="fileIn" type="file" accept="image/*" multiple hidden>
+    <span class="sep"></span>
+    <label>From <select id="sSrc"></select></label>
+    <label>To <select id="sDst"></select></label>
+    <span class="sep"></span>
+    <button id="bRun" title="Find the text on this page, read it and translate it">Translate page</button>
+    <button id="bRunAll" title="Do every page that hasn't been done yet">Translate all pages</button>
+    <button id="bRetrans" title="Translate this page's texts again (keeps the boxes and the original text)">Re-translate</button>
+    <button id="bStop" hidden>Stop</button>
+    <span class="sep"></span>
+    <label title="Show the finished page or the original"><select id="sMode"><option value="out">Translated</option><option value="orig">Original</option></select></label>
+    <label><input id="cBoxes" type="checkbox" checked> Boxes</label>
+    <span class="sep"></span>
+    <button id="bSave" title="Save this page as a PNG">Save page</button>
+    <button id="bSaveAll" title="Save every translated page into a folder">Save all</button>
+    <span class="grow"></span>
+    <button id="aiPill" title="AI model setup"><i></i><span>AI: checking…</span></button>
+  </div>
+  <div id="pages"></div>
+  <div id="view">
+    <div id="empty">
+      <div style="font-size:16px;color:var(--text)">Open manga pages to start</div>
+      <div>Use <b>Open images</b> or drop image files here. Then press <b>Translate page</b>.<br>
+      Drag on the page to add a box by hand; drag a box to move it, its corner to resize it, <b>Delete</b> removes it.</div>
+    </div>
+    <div id="stage"><canvas id="cv"></canvas><div id="boxes"></div><div id="draft"></div></div>
+  </div>
+  <div id="side">
+    <div id="sideHead"><h3>Text on this page</h3>
+      <label title="Lettering font for every box that doesn't set its own">Font <select id="sFont" style="max-width:150px"></select></label>
+      <label title="English lettering in comics is usually all capitals"><input id="cCaps" type="checkbox"> CAPS</label>
+    </div>
+    <div id="cards"></div>
+  </div>
+  <div id="bar"><span id="status">Ready</span><span class="grow"></span>
+    <label title="Look at each bubble again up close after finding it. Slower, but reads small text better."><input id="cReread" type="checkbox"> Re-read each bubble up close</label>
+    <label title="Also find and translate sound effects drawn into the art"><input id="cSfx" type="checkbox"> Sound effects</label>
+    <span id="ver"></span></div>
+</div>
+<div id="modal"><div class="box">
+  <h2>AI model</h2>
+  <div>Inkswap reads and translates text with a vision AI model that runs on this PC. It's downloaded once
+  (from Hugging Face and GitHub, checked against a fingerprint), then everything works offline.</div>
+  <div id="mList"></div>
+  <progress id="mProg" max="1" value="0" hidden></progress>
+  <div id="mMsg"></div>
+  <div class="row"><button id="mClose">Close</button><button id="mStart" class="primary">Start</button></div>
+</div></div>
+<div id="toasts"></div>
+<script>
+const VERSION='1.0.0';
+const LANGS={ja:'Japanese',ko:'Korean',zh:'Chinese',es:'Spanish',en:'English'};
+const NO_SPACES=new Set(['ja','zh']);   // languages written without spaces between words
+const $=s=>document.querySelector(s);
+const S=Object.assign({src:'ja',dst:'en',model:'4b',font:'Comic Neue',caps:true,reread:true,sfx:false,mode:'out',boxes:true},(()=>{try{return JSON.parse(localStorage.getItem('inkswap')||'{}')}catch{return{}}})());
+const saveS=()=>{try{localStorage.setItem('inkswap',JSON.stringify(S))}catch{}};
+let pages=[], cur=-1, sel=null, busy=false, stopReq=false, ai={state:'stopped'};
+const cv=$('#cv'), ctx=cv.getContext('2d');
+
+/* ---------------- small helpers ---------------- */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hex=(r,g,b)=>'#'+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
+const lum=(r,g,b)=>0.299*r+0.587*g+0.114*b;
+function toast(msg,bad){const t=document.createElement('div');t.className='toast'+(bad?' bad':'');t.textContent=msg;$('#toasts').append(t);setTimeout(()=>t.remove(),bad?9000:4000)}
+function status(msg){$('#status').textContent=msg}
+function dirty(v){try{chrome.webview.postMessage({type:'dirty',value:v})}catch{}}
+const page=()=>pages[cur];
+
+/* ---------------- AI link (served by the exe, see Engine.cs) ---------------- */
+async function api(path,body){
+  const r=await fetch('/api/'+path,body===undefined?{}:{method:'POST',body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({error:'bad reply ('+r.status+')'}));
+  if(!r.ok) throw new Error(typeof j.error==='string'?j.error:(j.error?.message||('error '+r.status)));
+  return j;
+}
+async function chat(content,schema,maxTokens=2048){
+  const body={messages:[{role:'user',content}],temperature:0,max_tokens:maxTokens};
+  if(schema) body.response_format={type:'json_schema',json_schema:{name:'out',schema}};
+  const j=await api('chat',body);
+  const text=j.choices?.[0]?.message?.content??'';
+  return schema?JSON.parse(text):text.trim();
+}
+const ready=()=>ai.state==='ready';
+
+async function pollAi(){
+  try{ai=await api('status')}catch(e){ai={state:'error',message:e.message,models:[]}}
+  const pill=$('#aiPill');
+  pill.className=ai.state==='ready'?'ready':ai.state==='error'?'error':ai.state==='stopped'?'':'busy';
+  const name=ai.running?ai.running.toUpperCase():'';
+  pill.querySelector('span').textContent={ready:'AI ready ('+name+')',downloading:'AI downloading '+pct(),starting:'AI starting…',error:'AI problem',stopped:'AI off'}[ai.state]||ai.state;
+  if($('#modal').classList.contains('on')) drawModal();
+  updateButtons();
+  setTimeout(pollAi,ai.state==='ready'||ai.state==='stopped'?4000:700);
+}
+const pct=()=>ai.total?Math.floor(ai.done/ai.total*100)+'%':'';
+function drawModal(){
+  const list=$('#mList');
+  if(!list.dataset.built||list.dataset.built!==JSON.stringify(ai.models)){
+    list.dataset.built=JSON.stringify(ai.models);
+    list.innerHTML=(ai.models||[]).map(m=>`<label class="m"><input type="radio" name="mdl" value="${m.key}" ${m.key===S.model?'checked':''}><span>${esc(m.label)}${m.installed?'<em>downloaded</em>':''}</span></label>`).join('');
+    list.querySelectorAll('input').forEach(i=>i.onchange=()=>{S.model=i.value;saveS();drawModal()});
+  }
+  const m=(ai.models||[]).find(m=>m.key===S.model);
+  const working=ai.state==='downloading'||ai.state==='starting';
+  $('#mStart').textContent=ai.state==='ready'&&ai.running===S.model?'Running':m&&!m.installed?'Download and start':'Start';
+  $('#mStart').disabled=working||(ai.state==='ready'&&ai.running===S.model);
+  $('#mProg').hidden=ai.state!=='downloading';
+  if(ai.total) $('#mProg').value=ai.done/ai.total;
+  const gb=v=>(v/1e9).toFixed(2);
+  $('#mMsg').textContent=ai.state==='downloading'?`${ai.message}: ${gb(ai.done)} of ${gb(ai.total)} GB (${pct()})`:ai.state==='ready'?'The model is running. You can close this.':(ai.message||'');
+}
+$('#aiPill').onclick=()=>{$('#modal').classList.add('on');drawModal()};
+$('#mClose').onclick=()=>$('#modal').classList.remove('on');
+$('#mStart').onclick=async()=>{try{ai=await api('start',{model:S.model});drawModal();setTimeout(pollAi,300)}catch(e){toast(e.message,true)}};
+
+/* ---------------- pages ---------------- */
+async function openFiles(files){
+  const before=pages.length;
+  for(const f of files){
+    if(!f.type.startsWith('image/')) continue;
+    try{
+      const img=await createImageBitmap(f);
+      const t=document.createElement('canvas'),k=Math.min(1,260/img.width);
+      t.width=img.width*k;t.height=img.height*k;t.getContext('2d').drawImage(img,0,0,t.width,t.height);
+      pages.push({name:f.name.replace(/\.[^.]+$/,''),img,w:img.width,h:img.height,items:[],nextId:1,thumb:t.toDataURL('image/jpeg',.7),done:false});
+    }catch(e){toast(`Couldn't open ${f.name}: ${e.message}`,true)}
+  }
+  drawPages();
+  if(pages.length>before) show(before);
+}
+$('#bOpen').onclick=()=>$('#fileIn').click();
+$('#fileIn').onchange=e=>{openFiles([...e.target.files]);e.target.value=''};
+addEventListener('dragover',e=>e.preventDefault());
+addEventListener('drop',e=>{e.preventDefault();openFiles([...e.dataTransfer.files])});
+
+function drawPages(){
+  $('#pages').innerHTML=pages.map((p,i)=>`<button class="thumb${i===cur?' on':''}" data-i="${i}"><img src="${p.thumb}"><span>${p.done?'<b>✓</b> ':''}${esc(p.name)}</span></button>`).join('');
+  $('#pages').querySelectorAll('.thumb').forEach(b=>b.onclick=()=>show(+b.dataset.i));
+}
+function show(i){
+  if(cur>=0&&pages[cur]&&i!==cur) delete pages[cur].data;   // keep pixel data for the open page only
+  cur=i;sel=null;
+  const p=page();
+  $('#empty').style.display=p?'none':'flex';
+  $('#stage').style.display=p?'block':'none';
+  if(p){cv.width=p.w;cv.height=p.h;fitZoom()}
+  drawPages();drawAll();
+}
+let zoom=1;
+function fitZoom(){const p=page(),v=$('#view');if(!p)return;zoom=Math.min(1,(v.clientWidth-32)/p.w,(v.clientHeight-32)/p.h);applyZoom()}
+function applyZoom(){const p=page();if(!p)return;$('#stage').style.width=p.w*zoom+'px';$('#stage').style.height=p.h*zoom+'px'}
+$('#view').addEventListener('wheel',e=>{if(!e.ctrlKey||!page())return;e.preventDefault();zoom=Math.max(.1,Math.min(4,zoom*(e.deltaY<0?1.15:1/1.15)));applyZoom()},{passive:false});
+addEventListener('resize',()=>fitZoom());
+
+/* ---------------- image analysis: what to erase, text colour, room for the new text ---------------- */
+function pageData(p){
+  if(!p.data){const c=new OffscreenCanvas(p.w,p.h),g=c.getContext('2d',{willReadFrequently:true});g.drawImage(p.img,0,0);p.data=g.getImageData(0,0,p.w,p.h)}
+  return p.data;
+}
+function dist(d,i,r,g,b){const x=d[i]-r,y=d[i+1]-g,z=d[i+2]-b;return Math.sqrt(x*x+y*y+z*z)}
+function newItem(p,box,text=''){
+  return {id:p.nextId++,box,text,trans:'',font:'',size:0,bold:true,outline:false,erase:'auto',fit:'bubble',fg:null,fgUser:false};
+}
+// shortcut: fills erased text from the pixels around it (fine on flat bubbles, smudgy over detailed art); add a LaMa inpainting model if art backgrounds matter
+function analyze(p,it){
+  const key=it.box.map(Math.round).join()+it.erase+it.fit;
+  if(it._key===key) return;
+  it._key=key;
+  const d=pageData(p).data,W=p.w,pad=4;
+  let [x1,y1,x2,y2]=it.box.map(Math.round);
+  x1=Math.max(0,x1-pad);y1=Math.max(0,y1-pad);x2=Math.min(W,x2+pad);y2=Math.min(p.h,y2+pad);
+  const rw=x2-x1,rh=y2-y1;
+  it.area=[...it.box];it._patch=null;
+  if(rw<3||rh<3) return;
+  // background = the most common colour in the box: the bubble's paper, whether the box is tight or loose
+  const counts=new Map(),q=i=>(d[i]>>4)<<8|(d[i+1]>>4)<<4|(d[i+2]>>4);
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){const k=q((y*W+x)*4);counts.set(k,(counts.get(k)||0)+1)}
+  let bk=0,best=0;for(const[k,c]of counts)if(c>best){best=c;bk=k}
+  let r=0,g=0,b=0,n=0,near=0;
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){const i=(y*W+x)*4;if(q(i)===bk){r+=d[i];g+=d[i+1];b+=d[i+2];n++}}
+  r/=n;g/=n;b/=n;
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++)if(dist(d,(y*W+x)*4,r,g,b)<40)near++;
+  const flat=near/(rw*rh)>0.45;
+  it.bg=hex(r,g,b);
+  const bubble=flat?findBubble(p,it.box,[x1,y1,x2,y2],[r,g,b]):null;
+  // text pixels = clearly unlike the background, and inside the bubble when there is one (in a bubble, as
+  // unlike as findBubble's paper test, or the faint inner edge of the outline would count as text)
+  const mask=new Uint8Array(rw*rh),cut=bubble?60:50;
+  for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){const o=y*rw+x;if((!bubble||bubble.inside[o])&&dist(d,((y+y1)*W+x+x1)*4,r,g,b)>cut)mask[o]=1}
+  if(!bubble) dropBorderShapes(mask,rw,rh);   // an outline or panel edge cut by the box is not text
+  // lettering colour and where the text really is both come from the solid core of the strokes
+  let fr=0,fg=0,fb=0,fn=0,tx1=rw,ty1=rh,tx2=-1,ty2=-1;
+  for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
+    if(!mask[y*rw+x])continue;
+    const i=((y+y1)*W+x+x1)*4;
+    if(dist(d,i,r,g,b)<=120)continue;
+    if(x<tx1)tx1=x;if(x>tx2)tx2=x;if(y<ty1)ty1=y;if(y>ty2)ty2=y;
+    fr+=d[i];fg+=d[i+1];fb+=d[i+2];fn++;
+  }
+  if(!it.fgUser){it.fg=fn>8?hex(fr/fn,fg/fn,fb/fn):(lum(r,g,b)>128?'#000000':'#ffffff');it.outline=!flat}   // text over art reads better with a halo
+  for(let k=0;k<2;k++){const m2=mask.slice();for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){const o=y*rw+x;if(!mask[o]&&(!bubble||bubble.inside[o])&&((x>0&&mask[o-1])||(x<rw-1&&mask[o+1])||(y>0&&mask[o-rw])||(y<rh-1&&mask[o+rw])))m2[o]=1}mask.set(m2)}
+  if(it.erase!=='off'){
+    const patch=new ImageData(rw,rh),pd=patch.data;
+    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){const i=((y+y1)*W+x+x1)*4,o=(y*rw+x)*4;pd[o]=d[i];pd[o+1]=d[i+1];pd[o+2]=d[i+2];pd[o+3]=255}
+    if(it.erase==='box'){for(let o=0;o<pd.length;o+=4){pd[o]=r;pd[o+1]=g;pd[o+2]=b}}
+    else inpaint(pd,mask,rw,rh,[r,g,b]);
+    it._patch=patch;it._at=[x1,y1];
+  }
+  if(it.fit==='bubble'&&bubble){
+    const a=bubble.area;
+    it.area=tx2<0?a:[Math.min(a[0],x1+tx1),Math.min(a[1],y1+ty1),Math.max(a[2],x1+tx2+1),Math.max(a[3],y1+ty2+1)];
+  }
+}
+function dropBorderShapes(mask,w,h){
+  const seen=new Uint8Array(w*h);
+  const starts=[];for(let x=0;x<w;x++)starts.push(x,(h-1)*w+x);for(let y=0;y<h;y++)starts.push(y*w,y*w+w-1);
+  for(const s of starts){
+    if(!mask[s]||seen[s])continue;
+    const comp=[s];seen[s]=1;let minx=w,maxx=0,miny=h,maxy=0;
+    for(let k=0;k<comp.length;k++){const o=comp[k],x=o%w,y=(o/w)|0;
+      if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;
+      for(const j of[x>0?o-1:-1,x<w-1?o+1:-1,y>0?o-w:-1,y<h-1?o+w:-1])if(j>=0&&mask[j]&&!seen[j]){seen[j]=1;comp.push(j)}}
+    if(maxx-minx>w*.4||maxy-miny>h*.4)for(const o of comp)mask[o]=0;
+  }
+}
+// fills masked pixels from the outside in with the average of their already-known neighbours
+function inpaint(pd,mask,w,h,bg){
+  let todo=[];for(let i=0;i<mask.length;i++)if(mask[i])todo.push(i);
+  while(todo.length){
+    const next=[],done=[];
+    for(const i of todo){const x=i%w,y=(i/w)|0;let r=0,g=0,b=0,n=0;
+      for(const j of[x>0?i-1:-1,x<w-1?i+1:-1,y>0?i-w:-1,y<h-1?i+w:-1])if(j>=0&&!mask[j]){r+=pd[j*4];g+=pd[j*4+1];b+=pd[j*4+2];n++}
+      if(n)done.push(i,r/n,g/n,b/n);else next.push(i)}
+    if(!done.length){for(const i of next){pd[i*4]=bg[0];pd[i*4+1]=bg[1];pd[i*4+2]=bg[2]}break}
+    for(let k=0;k<done.length;k+=4){const i=done[k];pd[i*4]=done[k+1];pd[i*4+1]=done[k+2];pd[i*4+2]=done[k+3];mask[i]=0}
+    todo=next;
+  }
+}
+// Floods the paper colour out from the middle of the box to find the speech bubble. Returns the room for
+// lettering and which pixels of the box region are inside the bubble, or null if it isn't a closed bubble.
+function findBubble(p,[bx1,by1,bx2,by2],[x1,y1,x2,y2],[r,g,b]){
+  const d=pageData(p).data,W=p.w,H=p.h,ex=Math.max(x2-x1,y2-y1);
+  const sx1=Math.max(0,x1-ex),sy1=Math.max(0,y1-ex),sx2=Math.min(W,x2+ex),sy2=Math.min(H,y2+ex),sw=sx2-sx1,sh=sy2-sy1;
+  const seen=new Uint8Array(sw*sh),stack=[],paper=(x,y)=>dist(d,(y*W+x)*4,r,g,b)<60;
+  const cw=(bx2-bx1)*.3,ch=(by2-by1)*.3;
+  for(let y=Math.round(by1+ch);y<=Math.round(by2-ch);y++)for(let x=Math.round(bx1+cw);x<=Math.round(bx2-cw);x++)
+    if(paper(x,y)){const o=(y-sy1)*sw+x-sx1;if(!seen[o]){seen[o]=1;stack.push(o)}}
+  if(!stack.length) return null;
+  let fx1=W,fy1=H,fx2=0,fy2=0;
+  const nb=(o,x,y)=>[x>0?o-1:-1,x<sw-1?o+1:-1,y>0?o-sw:-1,y<sh-1?o+sw:-1];
+  while(stack.length){
+    const o=stack.pop(),x=o%sw,y=(o/sw)|0;
+    if(x===0&&sx1>0||y===0&&sy1>0||x===sw-1&&sx2<W||y===sh-1&&sy2<H) return null;   // leaked out: not a closed bubble
+    const ax=x+sx1,ay=y+sy1;if(ax<fx1)fx1=ax;if(ax>fx2)fx2=ax;if(ay<fy1)fy1=ay;if(ay>fy2)fy2=ay;
+    for(const j of nb(o,x,y))if(j>=0&&!seen[j]&&paper(j%sw+sx1,((j/sw)|0)+sy1)){seen[j]=1;stack.push(j)}
+  }
+  // outside = everything not bubble paper that can be reached from the window's edge (the outline and beyond)
+  const out=new Uint8Array(sw*sh),st=[];
+  for(let x=0;x<sw;x++)st.push(x,(sh-1)*sw+x);for(let y=0;y<sh;y++)st.push(y*sw,y*sw+sw-1);
+  for(const o of st)if(!seen[o])out[o]=1;
+  for(let k=0;k<st.length;k++){const o=st[k];if(!out[o])continue;for(const j of nb(o,o%sw,(o/sw)|0))if(j>=0&&!seen[j]&&!out[j]){out[j]=1;st.push(j)}}
+  const rw=x2-x1,rh=y2-y1,inside=new Uint8Array(rw*rh);
+  for(let y=0;y<rh;y++)for(let x=0;x<rw;x++)inside[y*rw+x]=out[(y+y1-sy1)*sw+x+x1-sx1]?0:1;
+  // the largest rectangle inside an ellipse is about 70% of each side; a little less leaves a margin
+  const iw=(fx2-fx1)*.18,ih=(fy2-fy1)*.18;
+  return{area:[fx1+iw,fy1+ih,fx2-iw,fy2-ih],inside};
+}
+
+/* ---------------- lettering ---------------- */
+function letterText(it){
+  let t=(it.trans||'').trim();
+  if(S.caps&&(S.dst==='en'||S.dst==='es')) t=t.toUpperCase();
+  return t;
+}
+function layout(g,text,w,h,font,bold,fixed){
+  const noSpace=!/\s/.test(text)&&/[　-鿿가-힯＀-￯]/.test(text);
+  const paras=text.split(/\n/);
+  const tryS=s=>{
+    g.font=`${bold?700:400} ${s}px "${font}"`;
+    const lines=[];let fits=true;
+    for(const para of paras){
+      const tokens=noSpace?[...para]:para.split(/\s+/).filter(Boolean);
+      let line='';
+      for(const t of tokens){const cand=line?line+(noSpace?'':' ')+t:t;if(g.measureText(cand).width<=w||!line)line=cand;else{lines.push(line);line=t}}
+      lines.push(line);
+    }
+    for(const l of lines)if(g.measureText(l).width>w)fits=false;
+    const lh=s*1.12;
+    return{lines,s,lh,ok:fits&&lines.length*lh<=h};
+  };
+  if(fixed) return tryS(fixed);
+  let lo=6,hi=Math.max(6,Math.min(160,Math.floor(h))),best=tryS(lo);
+  while(lo<=hi){const mid=(lo+hi)>>1,r=tryS(mid);if(r.ok){best=r;lo=mid+1}else hi=mid-1}
+  return best;
+}
+function letter(g,it){
+  const text=letterText(it);if(!text)return;
+  const [x1,y1,x2,y2]=it.area,w=x2-x1,h=y2-y1,font=it.font||S.font;
+  const L=layout(g,text,w,h,font,it.bold,it.size||0);
+  g.font=`${it.bold?700:400} ${L.s}px "${font}"`;
+  g.textAlign='center';g.textBaseline='middle';g.lineJoin='round';
+  const cx=(x1+x2)/2,top=(y1+y2)/2-L.lines.length*L.lh/2+L.lh/2;
+  L.lines.forEach((l,i)=>{
+    const y=top+i*L.lh;
+    if(it.outline){g.strokeStyle=lum(...rgb(it.fg))>128?'#000':'#fff';g.lineWidth=Math.max(2,L.s*.22);g.strokeText(l,cx,y)}
+    g.fillStyle=it.fg||'#000';g.fillText(l,cx,y);
+  });
+}
+const rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+async function render(g,p,mode){
+  g.drawImage(p.img,0,0);
+  if(mode==='orig') return;
+  for(const it of p.items) analyze(p,it);
+  for(const it of p.items) if(it._patch&&(it.trans||'').trim()) g.putImageData(it._patch,it._at[0],it._at[1]);
+  await Promise.all([...new Set(p.items.map(it=>it.font||S.font))].map(f=>document.fonts.load(`700 20px "${f}"`).catch(()=>{})));
+  for(const it of p.items) letter(g,it);
+}
+let drawing=null;
+function drawAll(){drawCards();drawBoxes();drawCanvas()}
+function drawCanvas(){
+  const p=page();if(!p)return;
+  drawing=(drawing||Promise.resolve()).then(()=>page()===p&&render(ctx,p,S.mode)).catch(e=>console.error(e));
+}
+
+/* ---------------- boxes on the page ---------------- */
+function drawBoxes(){
+  const p=page(),el=$('#boxes');el.classList.toggle('hide',!S.boxes);
+  if(!p){el.innerHTML='';return}
+  el.innerHTML=p.items.map((it,n)=>{const[x1,y1,x2,y2]=it.box;
+    return `<div class="bx${it===sel?' on':''}" data-id="${it.id}" style="left:${x1/p.w*100}%;top:${y1/p.h*100}%;width:${(x2-x1)/p.w*100}%;height:${(y2-y1)/p.h*100}%"><b>${n+1}</b><u></u></div>`}).join('');
+}
+function select(it,scroll){
+  sel=it;
+  document.querySelectorAll('.bx').forEach(b=>b.classList.toggle('on',+b.dataset.id===it?.id));
+  document.querySelectorAll('.card').forEach(c=>c.classList.toggle('on',+c.dataset.id===it?.id));
+  if(scroll&&it)document.querySelector(`.card[data-id="${it.id}"]`)?.scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+const imgPt=e=>{const r=$('#stage').getBoundingClientRect(),p=page();return[(e.clientX-r.left)/r.width*p.w,(e.clientY-r.top)/r.height*p.h]};
+let drag=null;
+$('#stage').addEventListener('pointerdown',e=>{
+  const p=page();if(!p||e.button!==0)return;
+  const [x,y]=imgPt(e),bx=e.target.closest('.bx');
+  if(bx&&S.boxes){
+    const it=p.items.find(i=>i.id===+bx.dataset.id);select(it,true);
+    drag={it,mode:e.target.tagName==='U'?'size':'move',x,y,box:[...it.box]};
+  }else{select(null);drag={mode:'new',x,y}}
+  e.preventDefault();
+});
+addEventListener('pointermove',e=>{
+  if(!drag)return;const p=page(),[x,y]=imgPt(e),dx=x-drag.x,dy=y-drag.y;
+  if(drag.mode==='new'){
+    const d=$('#draft'),l=Math.min(x,drag.x),t=Math.min(y,drag.y);
+    Object.assign(d.style,{display:'block',left:l/p.w*100+'%',top:t/p.h*100+'%',width:Math.abs(dx)/p.w*100+'%',height:Math.abs(dy)/p.h*100+'%'});
+    return;
+  }
+  const b=drag.box,it=drag.it;
+  it.box=drag.mode==='move'?[b[0]+dx,b[1]+dy,b[2]+dx,b[3]+dy]:[b[0],b[1],Math.max(b[0]+8,b[2]+dx),Math.max(b[1]+8,b[3]+dy)];
+  const el=document.querySelector(`.bx[data-id="${it.id}"]`);
+  Object.assign(el.style,{left:it.box[0]/p.w*100+'%',top:it.box[1]/p.h*100+'%',width:(it.box[2]-it.box[0])/p.w*100+'%',height:(it.box[3]-it.box[1])/p.h*100+'%'});
+});
+addEventListener('pointerup',async e=>{
+  if(!drag)return;const p=page(),d=drag;drag=null;$('#draft').style.display='none';
+  if(d.mode!=='new'){d.it.box=clampBox(p,d.it.box);dirty(true);drawCanvas();return}
+  const [x,y]=imgPt(e);
+  if(Math.abs(x-d.x)<8||Math.abs(y-d.y)<8)return;
+  const it=newItem(p,clampBox(p,[Math.min(x,d.x),Math.min(y,d.y),Math.max(x,d.x),Math.max(y,d.y)]));
+  p.items.push(it);dirty(true);drawAll();select(it,true);
+  if(ready()&&!busy) guard(async()=>{await rereadItem(p,it);await translateItems(p,[it])});
+});
+function clampBox(p,[x1,y1,x2,y2]){const w=x2-x1,h=y2-y1;x1=Math.max(0,Math.min(p.w-w,x1));y1=Math.max(0,Math.min(p.h-h,y1));return[x1,y1,Math.min(p.w,x1+w),Math.min(p.h,y1+h)]}
+addEventListener('keydown',e=>{
+  if(e.target.matches('textarea,input,select'))return;
+  if((e.key==='Delete'||e.key==='Backspace')&&sel){const p=page();p.items=p.items.filter(i=>i!==sel);sel=null;dirty(true);drawAll()}
+  if(e.key==='Escape')select(null);
+});
+
+/* ---------------- the readable pane ---------------- */
+let fonts=['Comic Neue','Bangers'];
+function fontOptions(v,inherit){return(inherit?`<option value="">Page font (${esc(S.font)})</option>`:'')+fonts.map(f=>`<option ${f===v?'selected':''}>${esc(f)}</option>`).join('')}
+function drawCards(){
+  const p=page(),el=$('#cards');
+  if(!p){el.innerHTML='<div class="hint">No page open.</div>';return}
+  if(!p.items.length){el.innerHTML=`<div class="hint">No text boxes yet. Press <b>Translate page</b> to find the text automatically, or drag on the page to draw a box around some text.</div>`;return}
+  const s=LANGS[S.src].toUpperCase(),d=LANGS[S.dst].toUpperCase();
+  el.innerHTML=p.items.map((it,n)=>`<div class="card${it===sel?' on':''}" data-id="${it.id}">
+    <div class="hd"><span class="num">${n+1}</span><span class="grow"></span>
+      <button data-a="reread" title="Read this box again">Re-read</button><button data-a="retrans" title="Translate this box again">Re-translate</button><button data-a="del" title="Remove this box">✕</button></div>
+    <div class="lab s">${s} · original</div><textarea class="src" rows="2" data-f="text">${esc(it.text)}</textarea>
+    <div class="lab d">${d} · translation</div><textarea class="dst" rows="2" data-f="trans">${esc(it.trans)}</textarea>
+    <details><summary>Lettering</summary><div class="style">
+      <span>Font</span><select data-f="font">${fontOptions(it.font,true)}</select>
+      <span>Size</span><input type="number" min="0" max="300" data-f="size" value="${it.size}" title="0 = as big as fits">
+      <span>Colour</span><input type="color" data-f="fg" value="${it.fg||'#000000'}">
+      <span>Bold</span><input type="checkbox" data-f="bold" ${it.bold?'checked':''}>
+      <span>Outline</span><input type="checkbox" data-f="outline" ${it.outline?'checked':''}>
+      <span>Erase</span><select data-f="erase"><option value="auto">Original text only</option><option value="box">Whole box</option><option value="off">Nothing</option></select>
+      <span>Fit text to</span><select data-f="fit"><option value="bubble">The whole bubble</option><option value="box">Just this box</option></select>
+    </div></details></div>`).join('');
+  el.querySelectorAll('.card').forEach(c=>{
+    const it=p.items.find(i=>i.id===+c.dataset.id);
+    c.querySelector('[data-f=erase]').value=it.erase;c.querySelector('[data-f=fit]').value=it.fit;
+    c.onmouseenter=()=>document.querySelector(`.bx[data-id="${it.id}"]`)?.classList.add('hl');
+    c.onmouseleave=()=>document.querySelector(`.bx[data-id="${it.id}"]`)?.classList.remove('hl');
+    c.onfocusin=()=>select(it);
+    c.querySelectorAll('[data-f]').forEach(inp=>inp.addEventListener(inp.tagName==='TEXTAREA'||inp.type==='number'?'input':'change',()=>{
+      const f=inp.dataset.f;
+      it[f]=inp.type==='checkbox'?inp.checked:inp.type==='number'?+inp.value||0:inp.value;
+      if(f==='fg'||f==='outline')it.fgUser=true;
+      dirty(true);drawCanvas();
+    }));
+    c.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{
+      const a=b.dataset.a;
+      if(a==='del'){p.items=p.items.filter(i=>i!==it);if(sel===it)sel=null;dirty(true);drawAll();return}
+      guard(async()=>{if(a==='reread')await rereadItem(p,it);await translateItems(p,[it])});
+    });
+  });
+}
+
+/* ---------------- reading and translating ---------------- */
+function imageUrl(p,box,maxSide,type='image/jpeg'){
+  const [x1,y1,x2,y2]=box,w=x2-x1,h=y2-y1,k=Math.min(maxSide/Math.max(w,h),4);
+  const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w*k));c.height=Math.max(1,Math.round(h*k));
+  const g=c.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(p.img,x1,y1,w,h,0,0,c.width,c.height);
+  return c.toDataURL(type,.92);
+}
+const FIND_SCHEMA={type:'object',properties:{items:{type:'array',items:{type:'object',properties:{bbox_2d:{type:'array',items:{type:'integer'},minItems:4,maxItems:4},text:{type:'string'}},required:['bbox_2d','text']}}},required:['items']};
+async function findText(p){
+  const lang=LANGS[S.src];
+  const what=`speech bubbles, thought bubbles, captions and narration boxes${S.sfx?', and sound effects drawn into the art':' (skip sound effects drawn into the art)'}`;
+  const order=S.src==='ja'?'right to left, top to bottom, as Japanese manga is read':'the order a reader would read them';
+  const out=await chat([
+    {type:'image_url',image_url:{url:imageUrl(p,[0,0,p.w,p.h],1600)}},
+    {type:'text',text:`This is a comic page written in ${lang}. Find every piece of ${lang} text on it: ${what}. Give one entry per bubble or box (not per line), with its bounding box as bbox_2d [x1, y1, x2, y2] in coordinates from 0 to 1000 relative to the image, and the exact text written in it. List them in ${order}. Answer in JSON.`}],FIND_SCHEMA,4096);
+  return (out.items||[]).map(o=>{
+    let [a,b,c,d]=o.bbox_2d.map(v=>Math.max(0,Math.min(1000,v)));
+    if(c<a)[a,c]=[c,a];if(d<b)[b,d]=[d,b];
+    return{box:[a/1000*p.w,b/1000*p.h,c/1000*p.w,d/1000*p.h],text:(o.text||'').trim()};
+  }).filter(o=>o.text&&o.box[2]-o.box[0]>4&&o.box[3]-o.box[1]>4);
+}
+async function rereadItem(p,it){
+  const [x1,y1,x2,y2]=it.box,px=(x2-x1)*.06,py=(y2-y1)*.06;
+  const box=[Math.max(0,x1-px),Math.max(0,y1-py),Math.min(p.w,x2+px),Math.min(p.h,y2+py)];
+  const t=await chat([{type:'image_url',image_url:{url:imageUrl(p,box,640,'image/png')}},
+    {type:'text',text:`Transcribe the ${LANGS[S.src]} text in this image exactly as written. Output only the text itself, with no translation, notes or quotation marks. If there is no text, output nothing.`}],null,512);
+  it.text=NO_SPACES.has(S.src)?t.replace(/\s*\n\s*/g,''):t.replace(/\s*\n\s*/g,' ');
+  drawCards();
+}
+async function translateItems(p,items){
+  items=items.filter(it=>it.text.trim());
+  if(!items.length) return;
+  if(S.src===S.dst){items.forEach(it=>it.trans=it.text);return}
+  const all=p.items.filter(it=>it.text.trim()).map(it=>it.text);
+  const ctxNote=items.length<all.length?`\nFor context, here is all the text on this page in reading order: ${JSON.stringify(all)}\n`:'';
+  const out=await chat([{type:'text',text:
+    `You are translating a ${LANGS[S.src]} comic into natural, fluent ${LANGS[S.dst]}. Below, as a JSON array, are text bubbles from one page in reading order. Translate each one so it reads like real comic dialogue in ${LANGS[S.dst]} and stays short enough to fit its bubble. Keep names, tone, honorifics where natural, and sound effects as ${LANGS[S.dst]} sound effects.${ctxNote}
+Bubbles to translate: ${JSON.stringify(items.map(it=>it.text))}
+Answer in JSON as {"translations": [...]} with exactly one translation per bubble, in the same order.`}],
+    {type:'object',properties:{translations:{type:'array',items:{type:'string'},minItems:items.length,maxItems:items.length}},required:['translations']},4096);
+  items.forEach((it,i)=>it.trans=(out.translations[i]||'').trim());
+  dirty(true);drawCards();drawCanvas();
+}
+async function processPage(p){
+  const n=pages.indexOf(p)+1;
+  status(`Page ${n}: finding the text…`);
+  const found=await findText(p);
+  if(stopReq) return;
+  p.items=found.map(f=>newItem(p,f.box,f.text));p.nextId=p.items.length+1;
+  if(p===page()){sel=null;drawAll()}
+  if(S.reread) for(let i=0;i<p.items.length&&!stopReq;i++){status(`Page ${n}: reading bubble ${i+1} of ${p.items.length} up close…`);await rereadItem(p,p.items[i])}
+  if(stopReq) return;
+  status(`Page ${n}: translating ${p.items.length} bubbles…`);
+  await translateItems(p,p.items);
+  p.done=true;drawPages();
+  if(p===page())drawAll();
+}
+async function guard(fn){
+  if(busy)return;
+  if(!ready()){toast('The AI model is not running yet. Open AI setup (top right) to start it.',true);$('#aiPill').click();return}
+  busy=true;stopReq=false;updateButtons();
+  try{await fn();status(stopReq?'Stopped':'Done')}
+  catch(e){console.error(e);toast('Something went wrong: '+e.message,true);status('Failed: '+e.message)}
+  finally{busy=false;updateButtons()}
+}
+function updateButtons(){
+  const has=!!page();
+  $('#bRun').disabled=busy||!has;$('#bRunAll').disabled=busy||!pages.length;$('#bRetrans').disabled=busy||!has||!page()?.items.length;
+  $('#bSave').disabled=!has;$('#bSaveAll').disabled=!pages.length;$('#bStop').hidden=!busy;
+}
+$('#bRun').onclick=()=>{const p=page();if(p.items.some(i=>i.trans)&&!confirm('Find the text again? This replaces the boxes and translations on this page.'))return;guard(()=>processPage(p))};
+$('#bRunAll').onclick=()=>guard(async()=>{for(const p of pages){if(stopReq)break;if(!p.done)await processPage(p)}});
+$('#bRetrans').onclick=()=>guard(async()=>{status('Translating…');await translateItems(page(),page().items)});
+$('#bStop').onclick=()=>{stopReq=true;status('Stopping after this step…')};
+
+/* ---------------- saving ---------------- */
+async function renderBlob(p){const c=new OffscreenCanvas(p.w,p.h);await render(c.getContext('2d'),p,'out');return c.convertToBlob({type:'image/png'})}
+const outName=p=>`${p.name}-${S.dst}.png`;
+$('#bSave').onclick=async()=>{
+  const p=page(),a=document.createElement('a');
+  a.href=URL.createObjectURL(await renderBlob(p));a.download=outName(p);document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+};
+$('#bSaveAll').onclick=async()=>{
+  let dir;try{dir=await showDirectoryPicker({mode:'readwrite'})}catch{return}
+  let n=0;
+  for(const p of pages){
+    if(!p.items.length)continue;
+    status(`Saving ${outName(p)}…`);
+    const f=await dir.getFileHandle(outName(p),{create:true}),w=await f.createWritable();
+    await w.write(await renderBlob(p));await w.close();n++;
+    if(p!==page())delete p.data;
+  }
+  status(`Saved ${n} page${n===1?'':'s'}`);toast(`Saved ${n} translated page${n===1?'':'s'}.`);dirty(false);
+};
+
+/* ---------------- settings ---------------- */
+function fillLangs(){
+  const opts=v=>Object.entries(LANGS).map(([k,n])=>`<option value="${k}" ${k===v?'selected':''}>${n}</option>`).join('');
+  $('#sSrc').innerHTML=opts(S.src);$('#sDst').innerHTML=opts(S.dst);
+}
+$('#sSrc').onchange=e=>{S.src=e.target.value;saveS();drawCards()};
+$('#sDst').onchange=e=>{S.dst=e.target.value;saveS();drawAll()};
+$('#sMode').onchange=e=>{S.mode=e.target.value;saveS();drawCanvas()};
+$('#cBoxes').onchange=e=>{S.boxes=e.target.checked;saveS();drawBoxes()};
+$('#cCaps').onchange=e=>{S.caps=e.target.checked;saveS();drawCanvas()};
+$('#cReread').onchange=e=>{S.reread=e.target.checked;saveS()};
+$('#cSfx').onchange=e=>{S.sfx=e.target.checked;saveS()};
+$('#sFont').onchange=e=>{S.font=e.target.value;saveS();drawAll()};
+async function boot(){
+  $('#ver').textContent='v'+VERSION;
+  fillLangs();$('#sMode').value=S.mode;$('#cBoxes').checked=S.boxes;$('#cCaps').checked=S.caps;$('#cReread').checked=S.reread;$('#cSfx').checked=S.sfx;
+  try{fonts=[...fonts,...(await api('fonts')).filter(f=>!fonts.includes(f))]}catch{}
+  $('#sFont').innerHTML=fontOptions(S.font,false);
+  show(-1);
+  await pollAi();
+  const m=(ai.models||[]).find(m=>m.key===S.model);
+  if(ai.state==='stopped'){if(m?.installed)api('start',{model:S.model}).catch(e=>toast(e.message,true));else $('#aiPill').click()}
+}
+window.inkswap={pages,analyze,pageData,get cur(){return cur},S,processPage,findText,rereadItem,translateItems,render,show,get ai(){return ai}};   // for self-checks
+boot();
+</script>
+</body>
+</html>
