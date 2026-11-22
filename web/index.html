@@ -31,6 +31,16 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
 .thumb img{display:block;width:100%}
 .thumb span{display:block;padding:2px 4px;font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .thumb span b{color:var(--ok);font-weight:600}
+.thumb{position:relative}
+.thumb.picked{background:rgba(79,156,249,.2);border-color:rgba(79,156,249,.55)}
+.thumb.on{border-color:var(--accent)}
+.thumb .x{position:absolute;top:4px;right:4px;width:22px;height:22px;line-height:20px;text-align:center;font-style:normal;font-size:12px;border-radius:50%;background:rgba(14,17,22,.85);color:#fff;border:1px solid var(--line);display:none;cursor:pointer}
+.thumb:hover .x,.thumb:focus-visible .x{display:block}
+.thumb .x:hover{background:var(--bad);border-color:var(--bad)}
+#ctx{position:fixed;z-index:30;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px;display:flex;flex-direction:column;min-width:180px;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+#ctx[hidden]{display:none}
+#ctx button{border:none;background:none;text-align:left;padding:6px 10px;border-radius:5px}
+#ctx button:hover{background:var(--accent);color:#fff}
 #view{position:relative;overflow:auto;background:#0a0c10}
 #empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--dim);gap:10px;text-align:center;padding:20px}
 #stage{position:relative;margin:16px auto;user-select:none;touch-action:none;display:none}
@@ -141,8 +151,9 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
   <div class="row"><button id="mClose">Close</button><button id="mStart" class="primary">Start</button></div>
 </div></div>
 <div id="toasts"></div>
+<div id="ctx" hidden></div>
 <script>
-const VERSION='1.1.0';
+const VERSION='1.2.0';
 const LANGS={ja:'Japanese',ko:'Korean',zh:'Chinese',es:'Spanish',en:'English'};
 const NO_SPACES=new Set(['ja','zh']);   // languages written without spaces between words
 const $=s=>document.querySelector(s);
@@ -230,18 +241,62 @@ $('#fileIn').onchange=e=>{openFiles([...e.target.files]);e.target.value=''};
 addEventListener('dragover',e=>e.preventDefault());
 addEventListener('drop',e=>{e.preventDefault();openFiles([...e.dataTransfer.files])});
 
+// page list: click picks one page, Ctrl+click adds/removes, Shift+click picks a range; right-click or the hover ✕ closes
+const picked=new Set();let anchor=-1;
 function drawPages(){
-  $('#pages').innerHTML=pages.map((p,i)=>`<button class="thumb${i===cur?' on':''}" data-i="${i}"><img src="${p.thumb}"><span>${p.done?'<b>✓</b> ':''}${esc(p.name)}</span></button>`).join('');
-  $('#pages').querySelectorAll('.thumb').forEach(b=>b.onclick=()=>show(+b.dataset.i));
+  $('#pages').innerHTML=pages.map((p,i)=>`<button class="thumb${i===cur?' on':''}${picked.has(p)?' picked':''}" data-i="${i}" title="${esc(p.name)}"><img src="${p.thumb}" alt=""><span>${p.done?'<b>✓</b> ':''}${esc(p.name)}</span><i class="x" role="button" aria-label="Close ${esc(p.name)}" title="Close this page">✕</i></button>`).join('');
+  $('#pages').querySelectorAll('.thumb').forEach(b=>{
+    const i=+b.dataset.i,p=pages[i];
+    b.onclick=e=>{
+      if(e.target.classList.contains('x')){closePages([p]);return}
+      const ctrl=e.ctrlKey||e.metaKey;
+      if(e.shiftKey&&anchor>=0){picked.clear();for(let k=Math.min(anchor,i);k<=Math.max(anchor,i);k++)picked.add(pages[k])}
+      else if(ctrl){if(picked.has(p))picked.delete(p);else picked.add(p);anchor=i}
+      else{picked.clear();picked.add(p);anchor=i}
+      if(i!==cur&&picked.has(p))show(i);else drawPages();
+    };
+    b.oncontextmenu=e=>{
+      e.preventDefault();
+      if(!picked.has(p)){picked.clear();picked.add(p);anchor=i;drawPages()}
+      pageMenu(e.clientX,e.clientY);
+    };
+  });
+}
+function pageMenu(x,y){
+  const m=$('#ctx'),n=picked.size;
+  m.innerHTML=`<button data-a="close">${n>1?`Close ${n} pages`:'Close page'}</button>`+(pages.length>n?`<button data-a="others">Close all other pages</button>`:'');
+  m.hidden=false;
+  m.style.left=Math.min(x,innerWidth-m.offsetWidth-4)+'px';m.style.top=Math.min(y,innerHeight-m.offsetHeight-4)+'px';
+  m.querySelector('[data-a=close]').onclick=()=>{m.hidden=true;closePages([...picked])};
+  const o=m.querySelector('[data-a=others]');if(o)o.onclick=()=>{m.hidden=true;closePages(pages.filter(p=>!picked.has(p)))};
+}
+addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))$('#ctx').hidden=true},true);
+addEventListener('keydown',e=>{if(e.key==='Escape')$('#ctx').hidden=true});
+addEventListener('blur',()=>$('#ctx').hidden=true);
+function closePages(list){
+  list=list.filter(p=>pages.includes(p));
+  if(!list.length)return;
+  if(busy){toast('Wait for the translating to finish (or press Stop) before closing pages.',true);return}
+  const work=list.filter(p=>p.items.length).length;
+  const msg=list.length===1?"Close this page? Its translations and boxes will be lost unless you've saved it."
+    :`Close ${list.length} pages? ${work} of them ${work===1?'has':'have'} translations and boxes that will be lost unless you've saved them.`;
+  if(work&&!confirm(msg))return;
+  const curP=page(),at=cur;
+  for(const p of list){pages.splice(pages.indexOf(p),1);picked.delete(p)}
+  anchor=-1;
+  if(!pages.includes(curP)){cur=-1;show(pages.length?Math.min(at,pages.length-1):-1)}
+  else{cur=pages.indexOf(curP);drawPages();updateButtons()}
+  if(!pages.some(p=>p.items.length))dirty(false);
 }
 function show(i){
   if(cur>=0&&pages[cur]&&i!==cur){delete pages[cur].data;delete pages[cur]._clean}   // keep pixel data for the open page only
   cur=i;sel=null;
   const p=page();
+  if(p&&!picked.has(p)){picked.clear();picked.add(p);anchor=i}   // the page on show always counts as selected
   $('#empty').style.display=p?'none':'flex';
   $('#stage').style.display=p?'block':'none';
   if(p){cv.width=p.w;cv.height=p.h;fitZoom()}
-  drawPages();drawAll();
+  drawPages();drawAll();updateButtons();
 }
 let zoom=1;
 function fitZoom(){const p=page(),v=$('#view');if(!p)return;zoom=Math.min(1,(v.clientWidth-32)/p.w,(v.clientHeight-32)/p.h);applyZoom()}

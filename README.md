@@ -34,7 +34,9 @@ a USB stick.
 
 ## How to use it
 
-1. **Open images** (or drop image files on the window). Each page appears on the left.
+1. **Open images** (or drop image files on the window). Each page appears on the left. Click a page
+   to show it; Ctrl+click and Shift+click pick several. Close pages with the ✕ that appears when you
+   point at one, or right-click for **Close** (all picked pages) and **Close all other pages**.
 2. Pick the language **From** and **To**.
 3. Press **Translate page** (or **Translate all pages**). The boxes and texts appear as it works.
 4. Check the pane on the right. Edit any original text or translation; **Re-read** and

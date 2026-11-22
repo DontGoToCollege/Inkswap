@@ -72,6 +72,25 @@
   drag(document.querySelector(`.bx.er[data-id="${it.id}"]`), 15, 0);
   if (!(it.box[0] > 130) || it.tbox.join() !== tboxBefore) throw new Error('erase area drag went wrong: ' + it.box + ' / ' + it.tbox);
   key('e');
+  // page list: open two more pages, pick with Shift/Ctrl, close with the hover ✕ and the right-click menu
+  const more = new DataTransfer();
+  for (const n of ['b', 'c']) more.items.add(new File([await new Promise(r => c.toBlob(r))], n + '.png', { type: 'image/png' }));
+  input.files = more.files; input.dispatchEvent(new Event('change'));
+  for (let i = 0; i < 50 && app.pages.length < 3; i++) await sleep(100);
+  const thumb = i => document.querySelectorAll('.thumb')[i];
+  const click = (i, o = {}) => thumb(i).dispatchEvent(new MouseEvent('click', { bubbles: true, ...o }));
+  const names = sel => [...document.querySelectorAll(sel + ' span')].map(s => s.textContent.replace('✓ ', '')).join();
+  click(0); click(2, { shiftKey: true });
+  if (names('.thumb.picked') !== 'smoke,b,c') throw new Error('Shift+click picked ' + names('.thumb.picked'));
+  click(1, { ctrlKey: true });
+  if (names('.thumb.picked') !== 'smoke,c') throw new Error('Ctrl+click left ' + names('.thumb.picked'));
+  thumb(2).querySelector('.x').click();   // c has no work, so it closes without asking
+  if (names('.thumb') !== 'smoke,b') throw new Error('the ✕ left ' + names('.thumb'));
+  const confirmOk = window.confirm; window.confirm = () => true;   // the test page has work: answer the question with yes
+  thumb(1).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 60 }));
+  document.querySelector('#ctx [data-a=others]').click();
+  window.confirm = confirmOk;
+  if (names('.thumb') !== 'b' || app.cur !== 0 || !document.querySelector('#ctx').hidden) throw new Error('Close others left ' + names('.thumb') + ' cur=' + app.cur);
   // a reply that repeats itself and is cut off mid-entry still gives its finished, distinct bubbles
   const cutOff = '{"items": [\n {"bbox_2d": [10, 20, 300, 400], "text": "お前は\\"誰\\"だ"},\n' +
     ' {"bbox_2d": [500, 20, 900, 400], "text": "待って"},\n {"bbox_2d": [12, 22, 301, 398], "text": "お前は\\"誰\\"だ"},\n {"bbox_2d": [12, 2';
