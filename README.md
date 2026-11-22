@@ -15,7 +15,7 @@ the bubble. You can then fix anything by hand and save the finished pages.
 
 ## Download
 
-Get `Inkswap.exe` from the [Releases page](https://github.com/DontGoToCollege/Inkswap/releases).
+Get the latest `Inkswap-<version>.exe` from the [Releases page](https://github.com/DontGoToCollege/Inkswap/releases).
 It's a single file with nothing to install (Windows 10/11, 64-bit).
 
 The first time you start it, Inkswap asks which AI model to download (once, from Hugging Face and
