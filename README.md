@@ -4,7 +4,8 @@ Translate manga, manhwa and manhua pages on your own PC, offline. Inkswap finds 
 reads the text, translates it, erases the original lettering and letters the translation back into
 the bubble. You can then fix anything by hand and save the finished pages.
 
-- **Languages:** Japanese, Korean, Chinese, Spanish and English, in any direction.
+- **Languages:** detects each bubble's language by itself (a page can mix them) and translates into
+  English by default. Japanese, Korean, Chinese, Spanish and English work in any direction.
 - **Side-by-side pane:** every bubble is numbered on the page and listed on the right with its
   original text and its translation, each labelled with its language, both editable.
 - **Lettering:** matched to the original's colour, sized to fill the bubble, in a comic font
@@ -37,7 +38,8 @@ a USB stick.
 1. **Open images** (or drop image files on the window). Each page appears on the left. Click a page
    to show it; Ctrl+click and Shift+click pick several. Close pages with the ✕ that appears when you
    point at one, or right-click for **Close** (all picked pages) and **Close all other pages**.
-2. Pick the language **From** and **To**.
+2. **From** is **Auto-detect** and **To** is **English** unless you change them. Each bubble's card shows
+   the language Inkswap detected; if it's wrong, pick the right one there and press **Re-translate**.
 3. Press **Translate page** (or **Translate all pages**). The boxes and texts appear as it works.
 4. Check the pane on the right. Edit any original text or translation; **Re-read** and
    **Re-translate** redo one bubble. Drag on the page to add a box the AI missed.
@@ -48,13 +50,13 @@ a USB stick.
 
    Drag either kind of box to move it and any corner to resize it. The arrow keys nudge the box you
    grabbed last (hold Shift for 10 pixels), **E** switches between a bubble's two boxes, and Delete
-   removes the bubble. The **Boxes** menu can limit grabbing to one kind, or hide the boxes.
+   removes the bubble. The **Boxes** menu can limit grabbing to one kind.
    Under **Lettering**, **Erase** picks what the erase area does: remove the original text (smart, the
    default), fill an oval or the rectangle with the **Erase colour** (a whiteout you place yourself),
    or nothing. **Fit to bubble again** puts a text box back.
 6. **Save page** saves a PNG; **Save all** saves every translated page into a folder you pick.
 
-Switch the view to **Original** to compare, and set **Boxes** to **Hidden** to see the clean result.
+Switch the view to **Original** to compare, and untick **Show boxes** (or press **H**) to see the page exactly as it will be saved.
 
 ## Limits
 

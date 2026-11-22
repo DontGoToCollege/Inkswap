@@ -78,6 +78,7 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
 .card .hd button{padding:2px 7px;font-size:12px}
 .lab{font-size:11px;font-weight:600;letter-spacing:.04em;margin:4px 0 2px}
 .lab.s{color:var(--src)} .lab.d{color:var(--dst)}
+.lab select.lang{font:inherit;letter-spacing:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer}
 .card textarea.src{border-left:3px solid var(--src)}
 .card textarea.dst{border-left:3px solid var(--dst)}
 .card details{margin-top:6px;color:var(--dim)}
@@ -115,7 +116,8 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
     <button id="bStop" hidden>Stop</button>
     <span class="sep"></span>
     <label title="Show the finished page or the original"><select id="sMode"><option value="out">Translated</option><option value="orig">Original</option></select></label>
-    <label title="Which boxes you can grab: green text boxes (where the translation goes), orange erase areas (what gets removed), or both. E switches which of the selected bubble's boxes the arrow keys move.">Boxes <select id="sLayer"><option value="both">Both</option><option value="tbox">Text boxes only</option><option value="box">Erase areas only</option><option value="hide">Hidden</option></select></label>
+    <label title="Which boxes you can grab: green text boxes (where the translation goes), orange erase areas (what gets removed), or both. E switches which of the selected bubble's boxes the arrow keys move.">Boxes <select id="sLayer"><option value="both">Both</option><option value="tbox">Text boxes only</option><option value="box">Erase areas only</option></select></label>
+    <label title="Untick to see the page exactly as it will be saved (H)"><input id="cShow" type="checkbox"> Show boxes</label>
     <span class="sep"></span>
     <button id="bSave" title="Save this page as a PNG">Save page</button>
     <button id="bSaveAll" title="Save every translated page into a folder">Save all</button>
@@ -155,12 +157,17 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
 <div id="toasts"></div>
 <div id="ctx" hidden></div>
 <script>
-const VERSION='1.3.0';
+const VERSION='1.4.0';
 const LANGS={ja:'Japanese',ko:'Korean',zh:'Chinese',es:'Spanish',en:'English'};
 const NO_SPACES=new Set(['ja','zh']);   // languages written without spaces between words
+// any language code the AI reports gets an English name, not only the ones in the menus
+const langName=c=>{if(!c)return'Unknown language';if(LANGS[c])return LANGS[c];try{return new Intl.DisplayNames(['en'],{type:'language'}).of(c)}catch{return c}};
+const itemLang=it=>it.lang||(S.src==='auto'?'':S.src);
 const $=s=>document.querySelector(s);
-const S=Object.assign({src:'ja',dst:'en',model:'4b',font:'Comic Neue',caps:true,reread:true,sfx:false,mode:'out',layer:'both'},(()=>{try{return JSON.parse(localStorage.getItem('inkswap')||'{}')}catch{return{}}})());
+const S=Object.assign({src:'auto',dst:'en',model:'4b',font:'Comic Neue',caps:true,reread:true,sfx:false,mode:'out',layer:'both',show:true},(()=>{try{return JSON.parse(localStorage.getItem('inkswap')||'{}')}catch{return{}}})());
 const saveS=()=>{try{localStorage.setItem('inkswap',JSON.stringify(S))}catch{}};
+// once: switch older settings to the new defaults (detect the language, translate to English; Hidden is now its own toggle)
+if(!S.v14){S.src='auto';S.dst='en';if(S.layer==='hide'){S.layer='both';S.show=false}S.v14=1;saveS()}
 let pages=[], cur=-1, sel=null, busy=false, stopReq=false, ai={state:'stopped'};
 const cv=$('#cv'), ctx=cv.getContext('2d');
 
@@ -314,8 +321,8 @@ function pageData(p){
   return p.data;
 }
 function dist(d,i,r,g,b){const x=d[i]-r,y=d[i+1]-g,z=d[i+2]-b;return Math.sqrt(x*x+y*y+z*z)}
-function newItem(p,box,text=''){
-  return {id:p.nextId++,box,tbox:null,text,trans:'',font:'',size:0,bold:true,outline:false,erase:'auto',fg:null,fgUser:false};
+function newItem(p,box,text='',lang=''){
+  return {id:p.nextId++,box,tbox:null,text,lang,trans:'',font:'',size:0,bold:true,outline:false,erase:'auto',fg:null,fgUser:false};
 }
 // shortcut: text over detailed art is filled from the pixels around it (smudgy); add a LaMa inpainting model if art backgrounds matter
 function analyze(p,it){
@@ -533,7 +540,7 @@ let selK='tbox';
 const place=(el,p,[x1,y1,x2,y2])=>Object.assign(el.style,{left:x1/p.w*100+'%',top:y1/p.h*100+'%',width:(x2-x1)/p.w*100+'%',height:(y2-y1)/p.h*100+'%'});
 function drawBoxes(){
   const p=page(),el=$('#boxes');
-  el.className=S.layer==='hide'?'hide':'L-'+S.layer;
+  el.className=S.show?'L-'+S.layer:'hide';
   if(!p){el.innerHTML='';return}
   el.innerHTML='';
   p.items.forEach((it,n)=>{
@@ -547,6 +554,7 @@ function drawBoxes(){
   });
 }
 function setLayer(l){S.layer=l;saveS();$('#sLayer').value=l;drawBoxes()}
+function setShow(v){S.show=v;saveS();$('#cShow').checked=v;drawBoxes()}
 function select(it,scroll){
   sel=it;
   document.querySelectorAll('.bx').forEach(b=>{b.classList.toggle('on',+b.dataset.id===it?.id);b.classList.toggle('act',+b.dataset.id===it?.id&&b.dataset.k===selK)});
@@ -558,7 +566,7 @@ let drag=null;
 $('#stage').addEventListener('pointerdown',e=>{
   const p=page();if(!p||e.button!==0)return;
   const [x,y]=imgPt(e),bx=e.target.closest('.bx');
-  if(bx&&S.layer!=='hide'){
+  if(bx&&S.show){
     const it=p.items.find(i=>i.id===+bx.dataset.id),k=bx.dataset.k;selK=k;select(it,true);
     drag={it,k,mode:e.target.tagName==='U'?e.target.className:'move',x,y,orig:[...it[k]],el:bx};
   }else{select(null);drag={mode:'new',x,y}}
@@ -591,9 +599,10 @@ addEventListener('keydown',e=>{
   const p=page();if(!p)return;
   if((e.key==='Delete'||e.key==='Backspace')&&sel){p.items=p.items.filter(i=>i!==sel);sel=null;dirty(true);drawAll()}
   if(e.key==='Escape')select(null);
+  if(e.key==='h'||e.key==='H')setShow(!S.show);
   if(e.key==='e'||e.key==='E'){selK=selK==='box'?'tbox':'box';if(S.layer==='box'||S.layer==='tbox')setLayer(selK);else select(sel)}
   const arrows={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
-  if(arrows&&sel&&S.layer!=='hide'){
+  if(arrows&&sel&&S.show){
     e.preventDefault();
     const s=e.shiftKey?10:1,k=S.layer==='both'?selK:S.layer,b=sel[k];
     sel[k]=clampBox(p,[b[0]+arrows[0]*s,b[1]+arrows[1]*s,b[2]+arrows[0]*s,b[3]+arrows[1]*s]);
@@ -609,11 +618,13 @@ function drawCards(){
   const p=page(),el=$('#cards');
   if(!p){el.innerHTML='<div class="hint">No page open.</div>';return}
   if(!p.items.length){el.innerHTML=`<div class="hint">No text boxes yet. Press <b>Translate page</b> to find the text automatically, or drag on the page to draw a box around some text.</div>`;return}
-  const s=LANGS[S.src].toUpperCase(),d=LANGS[S.dst].toUpperCase();
+  const d=langName(S.dst).toUpperCase();
+  const langPick=it=>{const c=itemLang(it),codes=[...new Set([...Object.keys(LANGS),...(c?[c]:[])])];
+    return `<select class="lang" data-f="lang" title="Language of the original (detected by the AI). Change it if it's wrong, then press Re-translate.">${c?'':'<option value="" selected>UNKNOWN LANGUAGE</option>'}${codes.map(k=>`<option value="${k}" ${k===c?'selected':''}>${esc(langName(k).toUpperCase())}</option>`).join('')}</select>`};
   el.innerHTML=p.items.map((it,n)=>`<div class="card${it===sel?' on':''}" data-id="${it.id}">
     <div class="hd"><span class="num">${n+1}</span><span class="grow"></span>
       <button data-a="reread" title="Read this box again">Re-read</button><button data-a="retrans" title="Translate this box again">Re-translate</button><button data-a="del" title="Remove this box">✕</button></div>
-    <div class="lab s">${s} · original</div><textarea class="src" rows="2" data-f="text">${esc(it.text)}</textarea>
+    <div class="lab s">${langPick(it)} · original</div><textarea class="src" rows="2" data-f="text">${esc(it.text)}</textarea>
     <div class="lab d">${d} · translation</div><textarea class="dst" rows="2" data-f="trans">${esc(it.trans)}</textarea>
     <details><summary>Lettering</summary><div class="style">
       <span>Font</span><select data-f="font">${fontOptions(it.font,true)}</select>
@@ -654,31 +665,33 @@ function imageUrl(p,box,maxSide,type='image/jpeg'){
   const g=c.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(p.img,x1,y1,w,h,0,0,c.width,c.height);
   return c.toDataURL(type,.92);
 }
-const FIND_SCHEMA={type:'object',properties:{items:{type:'array',maxItems:60,items:{type:'object',properties:{bbox_2d:{type:'array',items:{type:'integer'},minItems:4,maxItems:4},text:{type:'string'}},required:['bbox_2d','text']}}},required:['items']};
+const LANG_CODE={type:'string',pattern:'^[a-z][a-z]$'};
+const FIND_SCHEMA={type:'object',properties:{items:{type:'array',maxItems:60,items:{type:'object',properties:{bbox_2d:{type:'array',items:{type:'integer'},minItems:4,maxItems:4},text:{type:'string'},lang:LANG_CODE},required:['bbox_2d','text','lang']}}},required:['items']};
 async function findText(p){
-  const lang=LANGS[S.src];
+  const auto=S.src==='auto',lang=langName(S.src);
   const what=`speech bubbles, thought bubbles, captions and narration boxes${S.sfx?', and sound effects drawn into the art':' (skip sound effects drawn into the art)'}`;
-  const order=S.src==='ja'?'right to left, top to bottom, as Japanese manga is read':'the order a reader would read them';
+  const order=S.src==='ja'?'right to left, top to bottom, as Japanese manga is read':auto?'the order a reader would read them (right to left for Japanese manga)':'the order a reader would read them';
+  const which=auto?'Find every piece of text on it':`It is written in ${lang}. Find every piece of ${lang} text on it`;
   const out=await chat([
     {type:'image_url',image_url:{url:imageUrl(p,[0,0,p.w,p.h],1600)}},
-    {type:'text',text:`This is a comic page written in ${lang}. Find every piece of ${lang} text on it: ${what}. Give one entry per bubble or box (not per line), with its bounding box as bbox_2d [x1, y1, x2, y2] in coordinates from 0 to 1000 relative to the image, and the exact text written in it. List them in ${order}. Answer in JSON.`}],FIND_SCHEMA,4096,true);
+    {type:'text',text:`This is a comic page. ${which}: ${what}. Give one entry per bubble or box (not per line), with its bounding box as bbox_2d [x1, y1, x2, y2] in coordinates from 0 to 1000 relative to the image, the exact text written in it, and its language as a two-letter ISO 639-1 code (for example ja, ko, zh, es, en). List them in ${order}. Answer in JSON.`}],FIND_SCHEMA,4096,true);
   const found=parseFound(out.text);
   if(out.cut) toast(`The AI's answer on ${p.name} ran too long and was cut off, so some text may be missing. Draw a box around anything it missed.`,true);
   return found.map(o=>{
     let [a,b,c,d]=o.bbox_2d.map(v=>Math.max(0,Math.min(1000,v)));
     if(c<a)[a,c]=[c,a];if(d<b)[b,d]=[d,b];
-    return{box:[a/1000*p.w,b/1000*p.h,c/1000*p.w,d/1000*p.h],text:(o.text||'').trim()};
+    return{box:[a/1000*p.w,b/1000*p.h,c/1000*p.w,d/1000*p.h],text:(o.text||'').trim(),lang:auto?o.lang:S.src};
   }).filter(o=>o.text&&o.box[2]-o.box[0]>4&&o.box[3]-o.box[1]>4);
 }
-// Takes every complete {bbox_2d, text} entry from the reply, so one cut off by the token limit (usually the model
+// Takes every complete {bbox_2d, text, lang} entry from the reply, so one cut off by the token limit (usually the model
 // repeating itself) still gives the bubbles it finished. Repeats of an entry already found are dropped.
 function parseFound(text){
-  const re=/\{\s*"bbox_2d"\s*:\s*\[\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*\]\s*,\s*"text"\s*:\s*("(?:[^"\\]|\\.)*")\s*\}/g;
+  const re=/\{\s*"bbox_2d"\s*:\s*\[\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*\]\s*,\s*"text"\s*:\s*("(?:[^"\\]|\\.)*")(?:\s*,\s*"lang"\s*:\s*"([A-Za-z-]*)")?\s*\}/g;
   const out=[];
   const iou=(a,b)=>{const w=Math.min(a[2],b[2])-Math.max(a[0],b[0]),h=Math.min(a[3],b[3])-Math.max(a[1],b[1]);if(w<=0||h<=0)return 0;
     const i=w*h,ar=r=>(r[2]-r[0])*(r[3]-r[1]);return i/(ar(a)+ar(b)-i)};
   for(const m of text.matchAll(re)){
-    const o={bbox_2d:m.slice(1,5).map(Number),text:JSON.parse(m[5])};
+    const o={bbox_2d:m.slice(1,5).map(Number),text:JSON.parse(m[5]),lang:(m[6]||'').toLowerCase().slice(0,2)};
     if(!out.some(e=>e.text===o.text&&iou(e.bbox_2d,o.bbox_2d)>.5)) out.push(o);
   }
   return out;
@@ -686,20 +699,28 @@ function parseFound(text){
 async function rereadItem(p,it){
   const [x1,y1,x2,y2]=it.box,px=(x2-x1)*.06,py=(y2-y1)*.06;
   const box=[Math.max(0,x1-px),Math.max(0,y1-py),Math.min(p.w,x2+px),Math.min(p.h,y2+py)];
-  const t=await chat([{type:'image_url',image_url:{url:imageUrl(p,box,640,'image/png')}},
-    {type:'text',text:`Transcribe the ${LANGS[S.src]} text in this image exactly as written. Output only the text itself, with no translation, notes or quotation marks. If there is no text, output nothing.`}],null,512);
-  it.text=NO_SPACES.has(S.src)?t.replace(/\s*\n\s*/g,''):t.replace(/\s*\n\s*/g,' ');
+  const known=S.src==='auto'?'':langName(S.src)+' ';
+  const out=await chat([{type:'image_url',image_url:{url:imageUrl(p,box,640,'image/png')}},
+    {type:'text',text:`Transcribe the ${known}text in this image exactly as written, with no translation, notes or quotation marks (empty if there is no text), and give its language as a two-letter ISO 639-1 code. Answer in JSON.`}],
+    {type:'object',properties:{text:{type:'string'},lang:LANG_CODE},required:['text','lang']},512);
+  it.lang=S.src==='auto'?out.lang:S.src;
+  const t=(out.text||'').trim();
+  it.text=NO_SPACES.has(it.lang)?t.replace(/\s*\n\s*/g,''):t.replace(/\s*\n\s*/g,' ');
   drawCards();
 }
 async function translateItems(p,items){
   items=items.filter(it=>it.text.trim());
   if(!items.length) return;
-  if(S.src===S.dst){items.forEach(it=>it.trans=it.text);return}
+  // bubbles already in the target language stay as they are
+  items.filter(it=>itemLang(it)===S.dst).forEach(it=>it.trans=it.text);
+  items=items.filter(it=>itemLang(it)!==S.dst);
+  if(!items.length){dirty(true);drawCards();drawCanvas();return}
+  const to=langName(S.dst),known=S.src!=='auto';
   const all=p.items.filter(it=>it.text.trim()).map(it=>it.text);
   const ctxNote=items.length<all.length?`\nFor context, here is all the text on this page in reading order: ${JSON.stringify(all)}\n`:'';
   const out=await chat([{type:'text',text:
-    `You are translating a ${LANGS[S.src]} comic into natural, fluent ${LANGS[S.dst]}. Below, as a JSON array, are text bubbles from one page in reading order. Translate each one so it reads like real comic dialogue in ${LANGS[S.dst]} and stays short enough to fit its bubble. Keep names, tone, honorifics where natural, and sound effects as ${LANGS[S.dst]} sound effects.${ctxNote}
-Bubbles to translate: ${JSON.stringify(items.map(it=>it.text))}
+    `You are translating a comic into natural, fluent ${to}. Below, as a JSON array, are text bubbles from one page in reading order${known?`, written in ${langName(S.src)}`:', each with the language it is written in'}. Translate each one so it reads like real comic dialogue in ${to} and stays short enough to fit its bubble. Keep names, tone, honorifics where natural, and sound effects as ${to} sound effects.${ctxNote}
+Bubbles to translate: ${JSON.stringify(items.map(it=>known?it.text:{language:langName(itemLang(it)),text:it.text}))}
 Answer in JSON as {"translations": [...]} with exactly one translation per bubble, in the same order.`}],
     {type:'object',properties:{translations:{type:'array',items:{type:'string'},minItems:items.length,maxItems:items.length}},required:['translations']},4096);
   items.forEach((it,i)=>it.trans=(out.translations[i]||'').trim());
@@ -714,7 +735,7 @@ function mergeByBubble(p,items){
     if(!same){out.push(it);continue}
     const [a,b]=[same.box,it.box];
     same.box=[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[2],b[2]),Math.max(a[3],b[3])];
-    same.text+=(NO_SPACES.has(S.src)?'':' ')+it.text;same._key=null;same.tbox=null;
+    same.text+=(NO_SPACES.has(itemLang(it))?'':' ')+it.text;same._key=null;same.tbox=null;
   }
   return out;
 }
@@ -723,7 +744,7 @@ async function processPage(p){
   status(`Page ${n}: finding the text…`);
   const found=await findText(p);
   if(stopReq) return;
-  p.items=mergeByBubble(p,found.map(f=>newItem(p,f.box,f.text)));
+  p.items=mergeByBubble(p,found.map(f=>newItem(p,f.box,f.text,f.lang)));
   if(p===page()){sel=null;drawAll()}
   if(S.reread) for(let i=0;i<p.items.length&&!stopReq;i++){status(`Page ${n}: reading bubble ${i+1} of ${p.items.length} up close…`);await rereadItem(p,p.items[i])}
   if(stopReq) return;
@@ -778,19 +799,20 @@ $('#bSaveAll').onclick=async()=>{
 /* ---------------- settings ---------------- */
 function fillLangs(){
   const opts=v=>Object.entries(LANGS).map(([k,n])=>`<option value="${k}" ${k===v?'selected':''}>${n}</option>`).join('');
-  $('#sSrc').innerHTML=opts(S.src);$('#sDst').innerHTML=opts(S.dst);
+  $('#sSrc').innerHTML=`<option value="auto" ${S.src==='auto'?'selected':''}>Auto-detect</option>`+opts(S.src);$('#sDst').innerHTML=opts(S.dst);
 }
 $('#sSrc').onchange=e=>{S.src=e.target.value;saveS();drawCards()};
 $('#sDst').onchange=e=>{S.dst=e.target.value;saveS();drawAll()};
 $('#sMode').onchange=e=>{S.mode=e.target.value;saveS();drawCanvas()};
 $('#sLayer').onchange=e=>setLayer(e.target.value);
+$('#cShow').onchange=e=>setShow(e.target.checked);
 $('#cCaps').onchange=e=>{S.caps=e.target.checked;saveS();drawCanvas()};
 $('#cReread').onchange=e=>{S.reread=e.target.checked;saveS()};
 $('#cSfx').onchange=e=>{S.sfx=e.target.checked;saveS()};
 $('#sFont').onchange=e=>{S.font=e.target.value;saveS();drawAll()};
 async function boot(){
   $('#ver').textContent='v'+VERSION;
-  fillLangs();$('#sMode').value=S.mode;$('#sLayer').value=S.layer;$('#cCaps').checked=S.caps;$('#cReread').checked=S.reread;$('#cSfx').checked=S.sfx;
+  fillLangs();$('#sMode').value=S.mode;$('#sLayer').value=S.layer;$('#cShow').checked=S.show;$('#cCaps').checked=S.caps;$('#cReread').checked=S.reread;$('#cSfx').checked=S.sfx;
   try{fonts=[...fonts,...(await api('fonts')).filter(f=>!fonts.includes(f))]}catch{}
   $('#sFont').innerHTML=fontOptions(S.font,false);
   show(-1);

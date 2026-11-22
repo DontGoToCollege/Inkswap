@@ -72,6 +72,11 @@
   drag(document.querySelector(`.bx.er[data-id="${it.id}"]`), 15, 0);
   if (!(it.box[0] > 130) || it.tbox.join() !== tboxBefore) throw new Error('erase area drag went wrong: ' + it.box + ' / ' + it.tbox);
   key('e');
+  // H hides every box (the page as it will be saved) and shows them again
+  key('h');
+  if (!document.querySelector('#boxes').classList.contains('hide') || document.querySelector('#cShow').checked) throw new Error('H did not hide the boxes');
+  key('h');
+  if (document.querySelector('#boxes').classList.contains('hide')) throw new Error('H did not show the boxes again');
   // page list: open two more pages, pick with Shift/Ctrl, close with the hover ✕ and the right-click menu
   const more = new DataTransfer();
   for (const n of ['b', 'c']) more.items.add(new File([await new Promise(r => c.toBlob(r))], n + '.png', { type: 'image/png' }));
@@ -93,9 +98,9 @@
   if (names('.thumb') !== 'b' || app.cur !== 0 || !document.querySelector('#ctx').hidden) throw new Error('Close others left ' + names('.thumb') + ' cur=' + app.cur);
   // a reply that repeats itself and is cut off mid-entry still gives its finished, distinct bubbles
   const cutOff = '{"items": [\n {"bbox_2d": [10, 20, 300, 400], "text": "お前は\\"誰\\"だ"},\n' +
-    ' {"bbox_2d": [500, 20, 900, 400], "text": "待って"},\n {"bbox_2d": [12, 22, 301, 398], "text": "お前は\\"誰\\"だ"},\n {"bbox_2d": [12, 2';
+    ' {"bbox_2d": [500, 20, 900, 400], "text": "待って", "lang": "ja"},\n {"bbox_2d": [12, 22, 301, 398], "text": "お前は\\"誰\\"だ"},\n {"bbox_2d": [12, 2';
   const parsed = app.parseFound(cutOff);
-  if (parsed.length !== 2 || parsed[0].text !== 'お前は"誰"だ' || parsed[1].bbox_2d[0] !== 500)
+  if (parsed.length !== 2 || parsed[0].text !== 'お前は"誰"だ' || parsed[1].bbox_2d[0] !== 500 || parsed[1].lang !== 'ja')
     throw new Error('cut-off reply parsed wrong: ' + JSON.stringify(parsed));
   return JSON.stringify({ before, after, area, parsed: parsed.length, fg: it.fg, bg: it.bg, outline: it.outline, ai: app.ai.state,
     fonts: document.querySelector('#sFont').options.length, w: px.width });
