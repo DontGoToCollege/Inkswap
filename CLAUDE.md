@@ -10,6 +10,9 @@ Offline manga translator: WPF + WebView2 shell (copied from SpliceBench) around 
 - `src/Inkswap/Engine.cs` downloads llama.cpp (Vulkan build, pinned `LlamaBuild`) and the Qwen3-VL
   GGUF + mmproj files (pinned URL, size and SHA-256), then runs `llama-server` on 127.0.0.1 with a
   free port, in a kill-on-close job. Its log is `Inkswap-Data\llama.log`.
+- llama-server settings: never pass `-ngl` (it turns off llama.cpp's fit-to-free-memory, so the 8B model ran out
+  of graphics memory on 8 GB cards); keep `-np 1 -c 8192`; `--device` picks the first non-integrated GPU (it splits
+  across all of them otherwise); the process is opted out of Windows power throttling (EcoQoS made it ~10x slower).
 - Each item has two rectangles: `box` = erase area (also what Re-read crops) and `tbox` = text box,
   fitted once by `ensureFit` and then only moved by the user. All erase areas are applied to one
   copy of the page (`cleanPage`), so overlapping areas can't paste original pixels back.
@@ -28,6 +31,9 @@ Offline manga translator: WPF + WebView2 shell (copied from SpliceBench) around 
   `Inkswap-Data\models` and `Inkswap-Data\llama` to the project root's, so the model is shared but the
   web view profile isn't. Two copies on one `Inkswap-Data` hang (one WebView2 profile can't be shared),
   which matters whenever the owner has the released exe open.
+- Real-input test (owner away): run a copy with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`
+  (the app appends it to its own arguments) and find positions and read state over CDP. Its file pickers belong to
+  that copy's `msedgewebview2.exe`, not `Inkswap.exe`. Save tests outside AppData: Chromium won't save there.
 - Updating llama.cpp or a model: change the pinned build/file, size and SHA-256 together (sizes
   and hashes from `gh release view` and the Hugging Face `api/models/.../tree/main` listing).
 - Icon: `tools\make-icon.ps1` (must be saved as UTF-8 with BOM for Windows PowerShell).
