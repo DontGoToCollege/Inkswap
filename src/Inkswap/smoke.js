@@ -46,6 +46,12 @@
   const px = document.querySelector('#cv').getContext('2d').getImageData(0, 0, 400, 300);
   const area = it.area.map(Math.round);
   if (!(area[2] - area[0] > 140)) throw new Error('text area did not grow to the bubble: ' + area);
-  return JSON.stringify({ before, after, area, fg: it.fg, bg: it.bg, outline: it.outline, ai: app.ai.state,
+  // a reply that repeats itself and is cut off mid-entry still gives its finished, distinct bubbles
+  const cutOff = '{"items": [\n {"bbox_2d": [10, 20, 300, 400], "text": "お前は\\"誰\\"だ"},\n' +
+    ' {"bbox_2d": [500, 20, 900, 400], "text": "待って"},\n {"bbox_2d": [12, 22, 301, 398], "text": "お前は\\"誰\\"だ"},\n {"bbox_2d": [12, 2';
+  const parsed = app.parseFound(cutOff);
+  if (parsed.length !== 2 || parsed[0].text !== 'お前は"誰"だ' || parsed[1].bbox_2d[0] !== 500)
+    throw new Error('cut-off reply parsed wrong: ' + JSON.stringify(parsed));
+  return JSON.stringify({ before, after, area, parsed: parsed.length, fg: it.fg, bg: it.bg, outline: it.outline, ai: app.ai.state,
     fonts: document.querySelector('#sFont').options.length, w: px.width });
 })()

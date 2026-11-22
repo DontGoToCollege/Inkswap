@@ -18,8 +18,10 @@ Offline manga translator: WPF + WebView2 shell (copied from SpliceBench) around 
 - Self-check: `Inkswap.exe --smoke` (no model needed). `--smoke <file.js>` runs any script against
   the app instead and saves `smoke.txt` + `smoke.png` in the data folder; the window stays
   off-screen and unfocused. `window.inkswap` exposes the pipeline for such scripts.
-- Real-model test: point the Debug build's `Inkswap-Data` at the project root's `Inkswap-Data`
-  (a junction) so the model is downloaded once and shared with the released exe.
+- Real-model test: copy the Debug output to a scratch folder and junction only its
+  `Inkswap-Data\models` and `Inkswap-Data\llama` to the project root's, so the model is shared but the
+  web view profile isn't. Two copies on one `Inkswap-Data` hang (one WebView2 profile can't be shared),
+  which matters whenever the owner has the released exe open.
 - Updating llama.cpp or a model: change the pinned build/file, size and SHA-256 together (sizes
   and hashes from `gh release view` and the Hugging Face `api/models/.../tree/main` listing).
 - Icon: `tools\make-icon.ps1` (must be saved as UTF-8 with BOM for Windows PowerShell).
