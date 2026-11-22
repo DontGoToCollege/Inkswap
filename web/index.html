@@ -51,6 +51,8 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
 .bx.er{border:2px dashed var(--src);background:rgba(227,168,87,.07)}
 .bx.tx{border:2px solid var(--dst);background:rgba(108,196,161,.08)}
 #boxes.L-box .bx.tx,#boxes.L-tbox .bx.er{pointer-events:none;opacity:.3}
+.bx.er.oval{border-radius:50%}
+.bx.act{outline:2px solid #fff;outline-offset:1px}
 #boxes.L-box .bx.tx b,#boxes.L-tbox .bx.er b{display:none}
 .bx.on{background:rgba(79,156,249,.14)}
 .bx.hl{box-shadow:0 0 0 3px rgba(79,156,249,.6)}
@@ -113,7 +115,7 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
     <button id="bStop" hidden>Stop</button>
     <span class="sep"></span>
     <label title="Show the finished page or the original"><select id="sMode"><option value="out">Translated</option><option value="orig">Original</option></select></label>
-    <label title="Which boxes you can move: green text boxes (where the translation goes) or orange erase areas (what gets removed). Press E to switch.">Boxes <select id="sLayer"><option value="tbox">Text boxes</option><option value="box">Erase areas</option><option value="hide">Hidden</option></select></label>
+    <label title="Which boxes you can grab: green text boxes (where the translation goes), orange erase areas (what gets removed), or both. E switches which of the selected bubble's boxes the arrow keys move.">Boxes <select id="sLayer"><option value="both">Both</option><option value="tbox">Text boxes only</option><option value="box">Erase areas only</option><option value="hide">Hidden</option></select></label>
     <span class="sep"></span>
     <button id="bSave" title="Save this page as a PNG">Save page</button>
     <button id="bSaveAll" title="Save every translated page into a folder">Save all</button>
@@ -125,7 +127,7 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
     <div id="empty">
       <div style="font-size:16px;color:var(--text)">Open manga pages to start</div>
       <div>Use <b>Open images</b> or drop image files here. Then press <b>Translate page</b>.<br>
-      Drag on the page to add a box by hand. Each bubble has a green <b>text box</b> (where the translation goes) and an orange <b>erase area</b> (what gets removed): pick which to move in <b>Boxes</b> or press <b>E</b>. Drag a box or its corners; arrow keys nudge it (Shift = 10px); <b>Delete</b> removes it.</div>
+      Drag on the page to add a box by hand. Each bubble has a green <b>text box</b> (where the translation goes) and an orange <b>erase area</b> (what gets removed). Drag either one or its corners; arrow keys nudge the one you grabbed last (Shift = 10px), <b>E</b> switches; <b>Delete</b> removes the bubble.</div>
     </div>
     <div id="stage"><canvas id="cv"></canvas><div id="boxes"></div><div id="draft"></div></div>
   </div>
@@ -153,11 +155,11 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-rad
 <div id="toasts"></div>
 <div id="ctx" hidden></div>
 <script>
-const VERSION='1.2.0';
+const VERSION='1.3.0';
 const LANGS={ja:'Japanese',ko:'Korean',zh:'Chinese',es:'Spanish',en:'English'};
 const NO_SPACES=new Set(['ja','zh']);   // languages written without spaces between words
 const $=s=>document.querySelector(s);
-const S=Object.assign({src:'ja',dst:'en',model:'4b',font:'Comic Neue',caps:true,reread:true,sfx:false,mode:'out',layer:'tbox'},(()=>{try{return JSON.parse(localStorage.getItem('inkswap')||'{}')}catch{return{}}})());
+const S=Object.assign({src:'ja',dst:'en',model:'4b',font:'Comic Neue',caps:true,reread:true,sfx:false,mode:'out',layer:'both'},(()=>{try{return JSON.parse(localStorage.getItem('inkswap')||'{}')}catch{return{}}})());
 const saveS=()=>{try{localStorage.setItem('inkswap',JSON.stringify(S))}catch{}};
 let pages=[], cur=-1, sel=null, busy=false, stopReq=false, ai={state:'stopped'};
 const cv=$('#cv'), ctx=cv.getContext('2d');
@@ -317,7 +319,7 @@ function newItem(p,box,text=''){
 }
 // shortcut: text over detailed art is filled from the pixels around it (smudgy); add a LaMa inpainting model if art backgrounds matter
 function analyze(p,it){
-  const key=it.box.map(Math.round).join()+it.erase;
+  const key=it.box.map(Math.round).join()+it.erase+(it.fill||'');
   if(it._key===key) return;
   it._key=key;
   const d=pageData(p).data,W=p.w;
@@ -328,38 +330,42 @@ function analyze(p,it){
   const rw=x2-x1,rh=y2-y1;
   it._w=null;it._fit=[...it.box];
   if(bx2-bx1<3||by2-by1<3) return;
-  // background = the most common colour in the box: the bubble's paper, whether the box is tight or loose
-  const counts=new Map(),q=i=>(d[i]>>4)<<8|(d[i+1]>>4)<<4|(d[i+2]>>4);
-  for(let y=by1;y<by2;y++)for(let x=bx1;x<bx2;x++){const k=q((y*W+x)*4);counts.set(k,(counts.get(k)||0)+1)}
-  let bk=0,best=0;for(const[k,c]of counts)if(c>best){best=c;bk=k}
-  let r=0,g=0,b=0,n=0,near=0;
-  for(let y=by1;y<by2;y++)for(let x=bx1;x<bx2;x++){const i=(y*W+x)*4;if(q(i)===bk){r+=d[i];g+=d[i+1];b+=d[i+2];n++}}
-  r/=n;g/=n;b/=n;
-  for(let y=by1;y<by2;y++)for(let x=bx1;x<bx2;x++)if(dist(d,(y*W+x)*4,r,g,b)<40)near++;
-  const flat=near/((bx2-bx1)*(by2-by1))>0.45;
+  // Background = the bubble's paper. In a loose box that's the most common colour inside it; in a tight box round
+  // dense bold text the ink can win, so also take the most common colour just outside the box and use the lighter.
+  const inner=[],ring=[];
+  for(let y=by1;y<by2;y++)for(let x=bx1;x<bx2;x++)inner.push((y*W+x)*4);
+  for(let x=x1;x<x2;x++)ring.push((y1*W+x)*4,((y2-1)*W+x)*4);for(let y=y1+1;y<y2-1;y++)ring.push((y*W+x1)*4,(y*W+x2-1)*4);
+  const I=major(d,inner),R=major(d,ring);
+  const [r,g,b]=lum(...R)>lum(...I)+60&&lum(...R)>128?R:I;
+  const share=list=>list.filter(i=>dist(d,i,r,g,b)<40).length/list.length;
+  const flat=share(inner)>0.45||share(ring)>0.7;
   it.bg=hex(r,g,b);
-  const bubble=flat?findBubble(p,it.box,[x1,y1,x2,y2],[r,g,b]):null;
+  // always look for a bubble: findBubble gives up by itself when the paper colour doesn't close into one
+  const bubble=findBubble(p,[bx1,by1,bx2,by2],[x1,y1,x2,y2],[r,g,b]);   // whole pixels: the AI's boxes are fractional
   // text pixels = clearly unlike the background (inside the bubble when there is one)
   const mask=new Uint8Array(rw*rh),cut=bubble?60:45;
   for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){const o=y*rw+x;if((!bubble||bubble.inside[o])&&dist(d,((y+y1)*W+x+x1)*4,r,g,b)>cut)mask[o]=1}
   if(!bubble) dropBorderShapes(mask,rw,rh);   // a panel edge or outline running through the box is not text
-  // lettering colour and where the text really is both come from the solid core of the strokes
-  let fr=0,fg=0,fb=0,fn=0,tx1=rw,ty1=rh,tx2=-1,ty2=-1;
+  // lettering colour = the solid core of the strokes
+  let fr=0,fg=0,fb=0,fn=0;
   for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
     if(!mask[y*rw+x])continue;
     const i=((y+y1)*W+x+x1)*4;
     if(dist(d,i,r,g,b)<=120)continue;
-    if(x<tx1)tx1=x;if(x>tx2)tx2=x;if(y<ty1)ty1=y;if(y>ty2)ty2=y;
     fr+=d[i];fg+=d[i+1];fb+=d[i+2];fn++;
   }
   if(!it.fgUser){it.fg=fn>8?hex(fr/fn,fg/fn,fb/fn):(lum(r,g,b)>128?'#000000':'#ffffff');it.outline=!flat}   // text over art reads better with a halo
-  if(bubble){const a=bubble.area;it._fit=tx2<0?a:[Math.min(a[0],x1+tx1),Math.min(a[1],y1+ty1),Math.max(a[2],x1+tx2+1),Math.max(a[3],y1+ty2+1)]}
+  it._bub=bubble?bubble.rect:null;
+  if(bubble)it._fit=bubble.area;   // the largest rectangle safely inside the bubble, so lettering never spills over its edge
   if(it.erase==='off') return;
   // what to write over the page: a mask of region pixels and the colour for each
-  const m=new Uint8Array(rw*rh),px=new Uint8ClampedArray(rw*rh*3);
-  const fill=o=>{m[o]=1;px[o*3]=r;px[o*3+1]=g;px[o*3+2]=b};
-  if(it.erase==='box'){
-    for(let y=by1-y1;y<by2-y1;y++)for(let x=bx1-x1;x<bx2-x1;x++)fill(y*rw+x);
+  const m=new Uint8Array(rw*rh),px=new Uint8ClampedArray(rw*rh*3),[fr2,fg2,fb2]=it.fill?rgb(it.fill):[r,g,b];
+  const fill=o=>{m[o]=1;px[o*3]=fr2;px[o*3+1]=fg2;px[o*3+2]=fb2};
+  if(it.erase==='box'||it.erase==='oval'){
+    // a solid shape the user places: the erase area itself, or the oval that fits in it
+    const cx=(bx1+bx2)/2-x1,cy=(by1+by2)/2-y1,rx=(bx2-bx1)/2,ry=(by2-by1)/2;
+    for(let y=by1-y1;y<by2-y1;y++)for(let x=bx1-x1;x<bx2-x1;x++)
+      if(it.erase==='box'||((x+.5-cx)/rx)**2+((y+.5-cy)/ry)**2<=1)fill(y*rw+x);
   }else if(bubble){
     // white out the bubble's paper inside the erase area, stopping 2px short of the outline
     const keep=bubble.inside.slice();
@@ -385,6 +391,14 @@ function cleanPage(p){
   }
   p._clean=c;p._cleanKey=key;
   return c;
+}
+// most common colour (in 16 levels a channel) of the given pixels, averaged within that bucket
+function major(d,list){
+  const counts=new Map(),q=i=>(d[i]>>4)<<8|(d[i+1]>>4)<<4|(d[i+2]>>4);
+  for(const i of list){const k=q(i);counts.set(k,(counts.get(k)||0)+1)}
+  let bk=0,best=0;for(const[k,c]of counts)if(c>best){best=c;bk=k}
+  let r=0,g=0,b=0,n=0;for(const i of list)if(q(i)===bk){r+=d[i];g+=d[i+1];b+=d[i+2];n++}
+  return[r/n,g/n,b/n];
 }
 function ensureFit(p,it){analyze(p,it);if(!it.tbox)it.tbox=[...it._fit]}
 function dropBorderShapes(mask,w,h){
@@ -437,11 +451,24 @@ function findBubble(p,[bx1,by1,bx2,by2],[x1,y1,x2,y2],[r,g,b]){
   for(let x=0;x<sw;x++)st.push(x,(sh-1)*sw+x);for(let y=0;y<sh;y++)st.push(y*sw,y*sw+sw-1);
   for(const o of st)if(!seen[o])out[o]=1;
   for(let k=0;k<st.length;k++){const o=st[k];if(!out[o])continue;for(const j of nb(o,o%sw,(o/sw)|0))if(j>=0&&!seen[j]&&!out[j]){out[j]=1;st.push(j)}}
+  // Text that touches the outline is joined to it, so it was counted as outside above. Take it back: pixels in the
+  // erase area that lie between bubble paper on their row or column, or well inside the bubble's oval (text can wall
+  // off a corner of paper from the rest), and are more than a few steps (through outside pixels) from anything that
+  // isn't. The outline itself is neither, so it stays.
+  const rowMin=new Int32Array(sh).fill(sw),rowMax=new Int32Array(sh).fill(-1),colMin=new Int32Array(sw).fill(sh),colMax=new Int32Array(sw).fill(-1);
+  for(let y=0;y<sh;y++)for(let x=0;x<sw;x++)if(seen[y*sw+x]){if(x<rowMin[y])rowMin[y]=x;if(x>rowMax[y])rowMax[y]=x;if(y<colMin[x])colMin[x]=y;if(y>colMax[x])colMax[x]=y}
+  const ecx=(fx1+fx2)/2-sx1,ecy=(fy1+fy2)/2-sy1,erx=(fx2-fx1)/2,ery=(fy2-fy1)/2;
+  const between=(x,y)=>(x>rowMin[y]&&x<rowMax[y])||(y>colMin[x]&&y<colMax[x])||((x-ecx)/erx)**2+((y-ecy)/ery)**2<.85;
+  const dd=new Uint8Array(sw*sh),q2=[];
+  for(let y=0;y<sh;y++)for(let x=0;x<sw;x++){const o=y*sw+x;if(out[o]&&!between(x,y)){dd[o]=1;q2.push(o)}}
+  for(let k=0;k<q2.length;k++){const o=q2[k];if(dd[o]>4)continue;for(const j of nb(o,o%sw,(o/sw)|0))if(j>=0&&!dd[j]&&out[j]){dd[j]=dd[o]+1;q2.push(j)}}
+  for(let y=Math.max(0,by1-sy1);y<Math.min(sh,by2-sy1);y++)for(let x=Math.max(0,bx1-sx1);x<Math.min(sw,bx2-sx1);x++){
+    const o=y*sw+x;if(out[o]&&!dd[o])out[o]=0}
   const rw=x2-x1,rh=y2-y1,inside=new Uint8Array(rw*rh);
   for(let y=0;y<rh;y++)for(let x=0;x<rw;x++)inside[y*rw+x]=out[(y+y1-sy1)*sw+x+x1-sx1]?0:1;
   // the largest rectangle inside an ellipse is about 70% of each side; a little less leaves a margin
-  const iw=(fx2-fx1)*.18,ih=(fy2-fy1)*.18;
-  return{area:[fx1+iw,fy1+ih,fx2-iw,fy2-ih],inside};
+  const iw=(fx2-fx1)*.16,ih=(fy2-fy1)*.16;
+  return{area:[fx1+iw,fy1+ih,fx2-iw,fy2-ih],rect:[fx1,fy1,fx2,fy2],inside};
 }
 
 /* ---------------- lettering ---------------- */
@@ -500,7 +527,9 @@ function drawCanvas(){
 }
 
 /* ---------------- boxes on the page ---------------- */
-// Both rectangles are drawn; only the layer picked in the Boxes menu (or toggled with E) can be grabbed.
+// Both rectangles are drawn and can be grabbed (the Boxes menu can limit that to one kind). selK is the one the
+// arrow keys move: the last one grabbed, or switched with E.
+let selK='tbox';
 const place=(el,p,[x1,y1,x2,y2])=>Object.assign(el.style,{left:x1/p.w*100+'%',top:y1/p.h*100+'%',width:(x2-x1)/p.w*100+'%',height:(y2-y1)/p.h*100+'%'});
 function drawBoxes(){
   const p=page(),el=$('#boxes');
@@ -511,7 +540,7 @@ function drawBoxes(){
     ensureFit(p,it);
     for(const k of['box','tbox']){
       const b=document.createElement('div');
-      b.className=`bx ${k==='box'?'er':'tx'}${it===sel?' on':''}`;b.dataset.id=it.id;b.dataset.k=k;
+      b.className=`bx ${k==='box'?'er':'tx'}${k==='box'&&it.erase==='oval'?' oval':''}${it===sel?' on':''}${it===sel&&k===selK?' act':''}`;b.dataset.id=it.id;b.dataset.k=k;
       b.innerHTML=`<b>${n+1}</b><u class="nw"></u><u class="ne"></u><u class="sw"></u><u class="se"></u>`;
       place(b,p,it[k]);el.append(b);
     }
@@ -520,7 +549,7 @@ function drawBoxes(){
 function setLayer(l){S.layer=l;saveS();$('#sLayer').value=l;drawBoxes()}
 function select(it,scroll){
   sel=it;
-  document.querySelectorAll('.bx').forEach(b=>b.classList.toggle('on',+b.dataset.id===it?.id));
+  document.querySelectorAll('.bx').forEach(b=>{b.classList.toggle('on',+b.dataset.id===it?.id);b.classList.toggle('act',+b.dataset.id===it?.id&&b.dataset.k===selK)});
   document.querySelectorAll('.card').forEach(c=>c.classList.toggle('on',+c.dataset.id===it?.id));
   if(scroll&&it)document.querySelector(`.card[data-id="${it.id}"]`)?.scrollIntoView({block:'nearest',behavior:'smooth'});
 }
@@ -530,7 +559,7 @@ $('#stage').addEventListener('pointerdown',e=>{
   const p=page();if(!p||e.button!==0)return;
   const [x,y]=imgPt(e),bx=e.target.closest('.bx');
   if(bx&&S.layer!=='hide'){
-    const it=p.items.find(i=>i.id===+bx.dataset.id),k=bx.dataset.k;select(it,true);
+    const it=p.items.find(i=>i.id===+bx.dataset.id),k=bx.dataset.k;selK=k;select(it,true);
     drag={it,k,mode:e.target.tagName==='U'?e.target.className:'move',x,y,orig:[...it[k]],el:bx};
   }else{select(null);drag={mode:'new',x,y}}
   e.preventDefault();
@@ -562,11 +591,11 @@ addEventListener('keydown',e=>{
   const p=page();if(!p)return;
   if((e.key==='Delete'||e.key==='Backspace')&&sel){p.items=p.items.filter(i=>i!==sel);sel=null;dirty(true);drawAll()}
   if(e.key==='Escape')select(null);
-  if(e.key==='e'||e.key==='E')setLayer(S.layer==='box'?'tbox':'box');
+  if(e.key==='e'||e.key==='E'){selK=selK==='box'?'tbox':'box';if(S.layer==='box'||S.layer==='tbox')setLayer(selK);else select(sel)}
   const arrows={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
   if(arrows&&sel&&S.layer!=='hide'){
     e.preventDefault();
-    const s=e.shiftKey?10:1,k=S.layer,b=sel[k];
+    const s=e.shiftKey?10:1,k=S.layer==='both'?selK:S.layer,b=sel[k];
     sel[k]=clampBox(p,[b[0]+arrows[0]*s,b[1]+arrows[1]*s,b[2]+arrows[0]*s,b[3]+arrows[1]*s]);
     const el=document.querySelector(`.bx[data-id="${sel.id}"][data-k="${k}"]`);if(el)place(el,p,sel[k]);
     dirty(true);drawCanvas();
@@ -592,7 +621,8 @@ function drawCards(){
       <span>Colour</span><input type="color" data-f="fg" value="${it.fg||'#000000'}">
       <span>Bold</span><input type="checkbox" data-f="bold" ${it.bold?'checked':''}>
       <span>Outline</span><input type="checkbox" data-f="outline" ${it.outline?'checked':''}>
-      <span>Erase</span><select data-f="erase" title="What to remove inside the orange erase area"><option value="auto">Original text only</option><option value="box">Everything in the area</option><option value="off">Nothing</option></select>
+      <span>Erase</span><select data-f="erase" title="What the orange erase area does"><option value="auto">Original text (smart)</option><option value="oval">Fill an oval</option><option value="box">Fill the rectangle</option><option value="off">Nothing</option></select>
+      <span>Erase colour</span><input type="color" data-f="fill" value="${it.fill||it.bg||'#ffffff'}" title="Colour used to fill erased text (picked from the bubble)">
       <span>Text box</span><button data-a="fit" title="Put the green text box back where Inkswap fits it: the bubble around the erase area">Fit to bubble again</button>
     </div></details></div>`).join('');
   el.querySelectorAll('.card').forEach(c=>{
@@ -605,6 +635,7 @@ function drawCards(){
       const f=inp.dataset.f;
       it[f]=inp.type==='checkbox'?inp.checked:inp.type==='number'?+inp.value||0:inp.value;
       if(f==='fg'||f==='outline')it.fgUser=true;
+      if(f==='erase')drawBoxes();
       dirty(true);drawCanvas();
     }));
     c.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{
@@ -674,12 +705,25 @@ Answer in JSON as {"translations": [...]} with exactly one translation per bubbl
   items.forEach((it,i)=>it.trans=(out.translations[i]||'').trim());
   dirty(true);drawCards();drawCanvas();
 }
+// The AI often gives one box per line; boxes that sit in the same speech bubble become one item (one translation).
+function mergeByBubble(p,items){
+  const out=[];
+  for(const it of items){
+    analyze(p,it);
+    const same=it._bub&&out.find(o=>o._bub&&o._bub.every((v,k)=>Math.abs(v-it._bub[k])<6));
+    if(!same){out.push(it);continue}
+    const [a,b]=[same.box,it.box];
+    same.box=[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[2],b[2]),Math.max(a[3],b[3])];
+    same.text+=(NO_SPACES.has(S.src)?'':' ')+it.text;same._key=null;same.tbox=null;
+  }
+  return out;
+}
 async function processPage(p){
   const n=pages.indexOf(p)+1;
   status(`Page ${n}: finding the text…`);
   const found=await findText(p);
   if(stopReq) return;
-  p.items=found.map(f=>newItem(p,f.box,f.text));p.nextId=p.items.length+1;
+  p.items=mergeByBubble(p,found.map(f=>newItem(p,f.box,f.text)));
   if(p===page()){sel=null;drawAll()}
   if(S.reread) for(let i=0;i<p.items.length&&!stopReq;i++){status(`Page ${n}: reading bubble ${i+1} of ${p.items.length} up close…`);await rereadItem(p,p.items[i])}
   if(stopReq) return;

@@ -49,7 +49,7 @@
   // nudging the erase area (E switches to it, arrows move it) must leave the text box where it is
   const key = k => dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
   const layer = document.querySelector('#sLayer');
-  layer.value = 'tbox'; layer.dispatchEvent(new Event('change'));   // don't depend on the saved setting
+  layer.value = 'both'; layer.dispatchEvent(new Event('change'));   // don't depend on the saved setting
   key('e'); key('ArrowLeft'); key('ArrowLeft'); key('ArrowLeft');
   await sleep(300);
   if (Math.round(it.box[0]) !== 127) throw new Error('arrow keys did not move the erase area: ' + it.box);

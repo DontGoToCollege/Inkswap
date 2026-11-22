@@ -13,6 +13,9 @@ Offline manga translator: WPF + WebView2 shell (copied from SpliceBench) around 
 - Each item has two rectangles: `box` = erase area (also what Re-read crops) and `tbox` = text box,
   fitted once by `ensureFit` and then only moved by the user. All erase areas are applied to one
   copy of the page (`cleanPage`), so overlapping areas can't paste original pixels back.
+- `findBubble` floods the paper colour from the box's middle; text touching the outline is taken back if it lies
+  between paper on its row/column or well inside the bubble's oval. Boxes the AI gives per line are merged when they
+  sit in the same bubble (`mergeByBubble`). Pass it whole-pixel boxes: the AI's are fractional.
 - Pipeline per page: one vision call finds boxes + text (`bbox_2d`, 0 to 1000 coordinates, JSON
   schema enforced), optionally one call per box re-reads a close crop, then one text call
   translates all bubbles together (JSON array of the same length).

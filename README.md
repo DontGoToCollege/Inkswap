@@ -46,9 +46,12 @@ a USB stick.
    - an orange **erase area**: what gets removed from the original. Inside a speech bubble it
      clears everything up to the outline, so it doesn't have to fit the text exactly.
 
-   Pick which ones to move in the **Boxes** menu (or press **E** to switch). Drag a box to move it,
-   drag any corner to resize it, use the arrow keys to nudge it (hold Shift for 10 pixels) and press
-   Delete to remove it. **Fit to bubble again** (under Lettering) puts a text box back.
+   Drag either kind of box to move it and any corner to resize it. The arrow keys nudge the box you
+   grabbed last (hold Shift for 10 pixels), **E** switches between a bubble's two boxes, and Delete
+   removes the bubble. The **Boxes** menu can limit grabbing to one kind, or hide the boxes.
+   Under **Lettering**, **Erase** picks what the erase area does: remove the original text (smart, the
+   default), fill an oval or the rectangle with the **Erase colour** (a whiteout you place yourself),
+   or nothing. **Fit to bubble again** puts a text box back.
 6. **Save page** saves a PNG; **Save all** saves every translated page into a folder you pick.
 
 Switch the view to **Original** to compare, and set **Boxes** to **Hidden** to see the clean result.
